@@ -4,7 +4,7 @@
             "name": "rtl0",
             "args": "rtl=0,rtl",
             "rate": 2000000,
-            "gains": "lna:auto",
+            "gains": "LNA:39",
             "ppm": 0,
             "tunable": true,
             "gain_mode": false,

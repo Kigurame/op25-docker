@@ -15,11 +15,22 @@ def _rtl_test(dev_index):
     except OSError as e:
         return {"index": dev_index, "present": False, "error": str(e)}
     out = r.stdout + r.stderr
-    if "No supported devices found" in out or "no devices" in out.lower() or r.returncode not in (0, 1):
+    if "No supported devices found" in out or "No matching devices found" in out:
+        return {"index": dev_index, "present": False}
+    # librtlsdr falls back to the last real device's strings for out-of-range
+    # indices ("Using device N:" shows which one it actually tried to open);
+    # a requested index that resolves to a different device is a phantom.
+    m = re.search(r"Using device\s+(\d+):", out)
+    opened = int(m.group(1)) if m else None
+    if opened is not None and opened != dev_index:
+        return {"index": dev_index, "present": False}
+    if r.returncode not in (0, 1):
         return {"index": dev_index, "present": False}
     detail = _parse(out)
     detail["present"] = True
     detail["index"] = dev_index
+    if "Failed to open rtlsdr device" in out or "usb_claim_interface error" in out:
+        detail["detail"] = "device busy (claimed by another process)"
     return detail
 
 

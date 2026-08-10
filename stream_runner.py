@@ -11,6 +11,7 @@ Audio format received from OP25 (see sockaudio.py):
   - port N+1   : same for slot B (TDMA)
   - 2-byte datagram: control flag, int16: 0=drain (flush), 1=drop
 """
+import base64
 import json
 import os
 import re
@@ -76,9 +77,10 @@ class TelemetryPoller(threading.Thread):
 
 class IcecastMetaUpdater:
     """Sends now-playing metadata to Icecast using the legacy admin API."""
-    def __init__(self, host, port, source_password):
+    def __init__(self, host, port, admin_password):
         self.base = "http://%s:%s/admin/metadata" % (host, port)
-        self.auth = ("source", source_password)
+        creds = base64.b64encode(("admin:%s" % admin_password).encode("utf-8")).decode("ascii")
+        self.headers = {"Authorization": "Basic " + creds}
         self._last = {}
 
     def update(self, mount, title):
@@ -88,7 +90,7 @@ class IcecastMetaUpdater:
         song = urllib.parse.quote(title, safe="+ ,:/")
         url = "%s?mount=%s&mode=updinfo&song=%s" % (self.base, urllib.parse.quote(mount), song)
         try:
-            req = urllib.request.Request(url)
+            req = urllib.request.Request(url, headers=self.headers)
             with urllib.request.urlopen(req, timeout=1.0):
                 pass
             self._last[mount] = title
@@ -300,7 +302,7 @@ class StreamManager:
         self.stream_cfg = load_json("stream.json")
         self.icecast = self.stream_cfg["icecast"]
         self.streams = [StreamPump(self.cfg, s, self.icecast) for s in self.stream_cfg.get("streams", [])]
-        self.meta = IcecastMetaUpdater(self.icecast["host"], self.icecast["port"], self.icecast["source_password"])
+        self.meta = IcecastMetaUpdater(self.icecast["host"], self.icecast["port"], self.icecast["admin_password"])
         # map stream name -> mount, and udp_port -> stream
         self.port_to_stream = {}
         self.name_to_mount = {}
