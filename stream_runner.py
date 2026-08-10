@@ -30,6 +30,7 @@ CONF_DIR = os.environ.get("OP25_CONF_DIR", "/opt/op25/conf")
 APPS_DIR = os.environ.get("OP25_APPS_DIR", "/opt/op25/apps")
 FFMPEG = "/usr/bin/ffmpeg"
 POLL_INTERVAL = 1.0          # seconds between telemetry polls
+META_INTERVAL = 3.0          # seconds between metadata refresh attempts
 AUDIO_FRAME = 160            # samples per channel per packet @8kHz
 SILENCE_INTERVAL = 0.02      # seconds between silence frames
 
@@ -97,6 +98,10 @@ class IcecastMetaUpdater:
         except (URLError, HTTPError, OSError) as e:
             log("metadata update failed for %s: %s" % (mount, e))
 
+    def forget(self, mount):
+        """Drop the cached title so the next update() re-pushes it."""
+        self._last.pop(mount, None)
+
 
 class StreamPump:
     """Binds a UDP audio pair and pipes S16_LE audio to an ffmpeg->icecast process."""
@@ -116,6 +121,7 @@ class StreamPump:
         self.keep_running = True
         self.rx_id = None
         self.now_title = "idle"
+        self.gen = 0
         self.icecast = icecast_cfg
         self._last_start = 0.0
         self._last_err = ""
@@ -149,6 +155,7 @@ class StreamPump:
             log("stream %s: unsupported codec" % self.name)
             return None
         self._last_start = time.time()
+        self.gen += 1
         self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         threading.Thread(target=self._drain_stderr, daemon=True).start()
         log("stream %s: ffmpeg started -> icecast %s%s" % (self.name, self.icecast["host"], self.mount))
@@ -313,6 +320,7 @@ class StreamManager:
         self._channel_index_by_port = self._map_channels()
         self.last_channel_update = {}
         self.last_trunk_update = {}
+        self._meta_gen = {}
 
     def _terminal_port(self):
         t = self.cfg.get("terminal", {}).get("terminal_type", "5600")
@@ -386,6 +394,11 @@ class StreamManager:
         for pump in self.streams:
             if not pump.enabled:
                 continue
+            # a fresh ffmpeg source reconnects the mount, which clears the
+            # icecast title; force the next push after each source generation
+            if self._meta_gen.get(pump.mount) != pump.gen:
+                self.meta.forget(pump.mount)
+                self._meta_gen[pump.mount] = pump.gen
             title = self._title_for_stream(pump)
             pump.now_title = title
             self.meta.update(pump.mount, title)
@@ -396,6 +409,11 @@ class StreamManager:
                 threading.Thread(target=s.run, daemon=True, name="pump-%s" % s.name).start()
         if any(s.enabled for s in self.streams):
             TelemetryPoller(self.term_port, self.on_telemetry).start()
+            # The op25 UDP terminal answers only the single most recent client,
+            # and we share it with the web control plane's poller, so telemetry
+            # reaches us intermittently. Push metadata on our own timer instead
+            # of only on telemetry receipt (IcecastMetaUpdater dedupes + retries).
+            threading.Thread(target=self._meta_loop, daemon=True, name="meta-loop").start()
         log("stream manager started (%d streams)" % len(self.streams))
         try:
             while True:
@@ -403,6 +421,14 @@ class StreamManager:
         except KeyboardInterrupt:
             for s in self.streams:
                 s.keep_running = False
+
+    def _meta_loop(self):
+        while True:
+            try:
+                self._update_metadata()
+            except Exception as e:
+                log("metadata loop error: %s" % e)
+            time.sleep(META_INTERVAL)
 
 
 if __name__ == "__main__":

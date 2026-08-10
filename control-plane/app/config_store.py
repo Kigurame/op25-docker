@@ -69,10 +69,72 @@ def validate_cfg(cfg):
     return True
 
 
+def _require_int(value, name, minimum=1, maximum=None):
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ConfigError("%s must be an integer" % name)
+    if value < minimum:
+        raise ConfigError("%s must be at least %d" % (name, minimum))
+    if maximum is not None and value > maximum:
+        raise ConfigError("%s must be at most %d" % (name, maximum))
+    return True
+
+
+def _require_str(value, name, allow_empty=False):
+    if not isinstance(value, str):
+        raise ConfigError("%s must be a string" % name)
+    if not allow_empty and not value.strip():
+        raise ConfigError("%s must not be empty" % name)
+    return True
+
+
 def validate_streams(s):
-    if not isinstance(s, dict) or "icecast" not in s:
-        raise ConfigError("stream.json must be an object with an 'icecast' section")
-    for st in s.get("streams", []):
-        if "name" not in st or "mount" not in st or "udp_port" not in st:
-            raise ConfigError("each stream needs 'name', 'mount' and 'udp_port'")
+    if not isinstance(s, dict):
+        raise ConfigError("stream.json must be a JSON object")
+    ic = s.get("icecast")
+    if not isinstance(ic, dict):
+        raise ConfigError("stream.json must contain an 'icecast' section")
+    _require_str(ic.get("host", "127.0.0.1"), "icecast.host")
+    _require_int(ic.get("port", 8000), "icecast.port", 1, 65535)
+    _require_int(ic.get("max_clients", 64), "icecast.max_clients")
+    _require_int(ic.get("max_listeners_per_mount", 16), "icecast.max_listeners_per_mount")
+    if not isinstance(ic.get("listener_auth", True), bool):
+        raise ConfigError("icecast.listener_auth must be a boolean")
+    for key in ("source_password", "admin_password", "supervisor_password"):
+        _require_str(ic.get(key, "changeme"), "icecast.%s" % key)
+    streams = s.get("streams")
+    if streams is None:
+        raise ConfigError("stream.json must contain a 'streams' list")
+    if not isinstance(streams, list):
+        raise ConfigError("'streams' must be a list")
+    seen_mounts = set()
+    seen_ports = set()
+    for i, st in enumerate(streams):
+        prefix = "streams[%d]" % i
+        if not isinstance(st, dict):
+            raise ConfigError("%s must be a JSON object" % prefix)
+        _require_str(st.get("name", ""), "%s.name" % prefix)
+        mount = st.get("mount", "")
+        _require_str(mount, "%s.mount" % prefix)
+        if not mount.startswith("/"):
+            raise ConfigError("%s.mount must start with '/'" % prefix)
+        if mount in seen_mounts:
+            raise ConfigError("duplicate stream mount %s" % mount)
+        seen_mounts.add(mount)
+        port = st.get("udp_port")
+        _require_int(port, "%s.udp_port" % prefix, 1, 65535)
+        if port in seen_ports:
+            raise ConfigError("duplicate stream udp_port %d" % port)
+        seen_ports.add(port)
+        if st.get("enabled", True) is not None and not isinstance(st.get("enabled", True), bool):
+            raise ConfigError("%s.enabled must be a boolean" % prefix)
+        codec = st.get("codec", "mp3")
+        if codec not in ("mp3", "aac"):
+            raise ConfigError("%s.codec must be 'mp3' or 'aac'" % prefix)
+        _require_int(st.get("bitrate_kbps", 48), "%s.bitrate_kbps" % prefix, 1)
+        _require_int(st.get("channels", 2), "%s.channels" % prefix, 1, 2)
+        for key in ("icecast_name", "icecast_description", "icecast_genre", "icecast_url"):
+            if key in st:
+                _require_str(st[key], "%s.%s" % (prefix, key), allow_empty=True)
+        if "max_listeners" in st:
+            _require_int(st["max_listeners"], "%s.max_listeners" % prefix, 1)
     return True
