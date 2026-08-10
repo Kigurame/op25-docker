@@ -1,0 +1,27 @@
+# Run the published op25-docker image straight from Docker Hub.
+#
+#   docker compose up -d
+#
+# First boot seeds ./conf with default configs; then edit conf/cfg.json
+# (control channel frequency) and conf/stream.json (icecast passwords) and
+# restart from the web UI at http://localhost:8080 (admin / admin123).
+services:
+  op25:
+    image: kigurame2/op25-docker:latest
+    container_name: op25
+    restart: unless-stopped
+    # USB access to the RTL-SDR dongle. Some hosts/kernels need `privileged: true`
+    # for reliable USB passthrough; start with the device mapping below.
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    ports:
+      - "8080:8080"   # web control plane
+      - "8000:8000"   # icecast (VLC / external players)
+    volumes:
+      - ./conf:/opt/op25/conf          # your editable config (seeded with defaults)
+      - ./logs:/var/log/op25           # op25 / streams / web logs
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=UTC
+    tmpfs:
+      - /tmp

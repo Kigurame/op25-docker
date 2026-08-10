@@ -41,7 +41,8 @@ monitoring, call history, and configuration.
 ```
 .
 ├── Dockerfile                  # multi-stage: builds op25 (gr310) then a slim runtime
-├── docker-compose.yml          # ports, volumes, USB passthrough, healthcheck
+├── docker-compose.yml          # ports, volumes, USB passthrough, healthcheck (builds locally)
+├── examples/docker-compose.yml # run the published Docker Hub image
 ├── render_configs.py           # renders icecast.xml / htpasswd / supervisord.conf from conf/
 ├── stream_runner.py            # UDP audio → ffmpeg → icecast pump + metadata updater
 ├── conf/                       # your editable configuration (volume-mounted)
@@ -68,7 +69,18 @@ monitoring, call history, and configuration.
 
 ## Quick start
 
-Clone, build, and run:
+### Option A — pull the prebuilt image from Docker Hub (recommended)
+
+```bash
+mkdir op25 && cd op25
+curl -o docker-compose.yml https://raw.githubusercontent.com/Kigurame/op25-docker/main/examples/docker-compose.yml
+docker compose up -d
+```
+
+First boot seeds `./conf` with the default configs. The image is published at
+[`kigurame2/op25-docker`](https://hub.docker.com/r/kigurame2/op25-docker).
+
+### Option B — build from source
 
 ```bash
 git clone https://github.com/Kigurame/op25-docker.git
