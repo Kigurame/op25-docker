@@ -204,7 +204,10 @@ async def api_restart(program: str, request: Request):
         return JSONResponse({"error": "unknown program"}, status_code=404)
     if program in ("streams", "icecast"):
         _rerender()
-    code, out = supervisor_ctl.restart(program)
+    if program == "web":
+        code, out = supervisor_ctl.restart_delayed("web")
+    else:
+        code, out = supervisor_ctl.restart(program)
     return {"ok": code == 0, "output": out}
 
 

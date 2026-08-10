@@ -21,11 +21,11 @@ def status():
     procs = []
     for line in out.splitlines():
         parts = line.split()
-        if len(parts) >= 2 and parts[0] != "" and not parts[0].startswith("op25"):
+        if len(parts) < 2 or parts[0] == "":
             continue
         # parse "name            RUNNING   pid 123, uptime 0:01:23"
-        m = parts[0] if parts else ""
-        state = parts[1] if len(parts) > 1 else ""
+        m = parts[0]
+        state = parts[1]
         rest = " ".join(parts[2:])
         procs.append({"name": m, "state": state, "info": rest})
     return procs
@@ -33,6 +33,23 @@ def status():
 
 def restart(program):
     return _ctl(["restart", program])
+
+
+def restart_delayed(program, delay=0.5):
+    """Restart a program without depending on the caller's lifetime.
+
+    Used for the `web` program, which must survive killing itself: the
+    supervisorctl subprocess is detached into its own session and delayed
+    briefly so the HTTP response can flush before the target dies."""
+    cmd = ["/bin/sh", "-c",
+           "sleep %s && supervisorctl -c /etc/op25/supervisord.conf "
+           "--serverurl unix://%s restart %s" % (delay, SUPERVISOR_SOCK, program)]
+    try:
+        subprocess.Popen(cmd, start_new_session=True,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return 0, "restart scheduled"
+    except OSError as e:
+        return -1, str(e)
 
 
 def stop(program):
