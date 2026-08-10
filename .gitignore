@@ -1,0 +1,13 @@
+# runtime state
+logs/
+*.log
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# local only
+*.local
+.DS_Store

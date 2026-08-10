@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OP25 Scanner Console</title>
+<style>
+:root {
+  --bg: #0d1117; --panel: #161b22; --panel2: #1c2330; --border: #2a3140;
+  --text: #d9e1ec; --muted: #8b98a8; --accent: #2f81f7; --green: #3fb950;
+  --red: #f85149; --amber: #d29922; --yellow: #e3b341;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+a { color: var(--accent); }
+h1 { font-size: 18px; margin: 0; }
+header { display: flex; align-items: center; gap: 16px; padding: 10px 18px;
+  background: var(--panel); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
+header .spacer { flex: 1; }
+nav button { background: none; border: 0; color: var(--muted); font-size: 14px;
+  cursor: pointer; padding: 6px 10px; border-radius: 6px; }
+nav button.active { color: var(--text); background: var(--panel2); }
+nav button:hover { color: var(--text); }
+button, .btn { background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+  padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.danger { background: #3a1d1d; border-color: #6e3a3a; color: var(--red); }
+button:disabled { opacity: .5; cursor: default; }
+main { max-width: 1200px; margin: 0 auto; padding: 18px; }
+section { margin-bottom: 22px; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+.panel h3 { margin: 0 0 10px; font-size: 14px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.card { background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.card .row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+.card .k { color: var(--muted); }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px;
+  background: var(--panel2); border: 1px solid var(--border); }
+.badge.live { background: #10351a; border-color: var(--green); color: var(--green); }
+.badge.enc { background: #3a1d1d; border-color: var(--red); color: var(--red); }
+.badge.emo { background: #3a3010; border-color: var(--yellow); color: var(--yellow); animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .5; } }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 600; }
+.mono { font-family: ui-monospace, "Cascadia Code", Menlo, monospace; font-size: 12.5px; }
+textarea { width: 100%; min-height: 340px; background: #0a0d12; color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; resize: vertical; }
+input[type=text], input[type=password] { background: #0a0d12; border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); padding: 7px 10px; font-size: 13px; }
+.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.msg { padding: 8px 12px; border-radius: 6px; margin: 8px 0; font-size: 13px; display: none; }
+.msg.err { background: #3a1d1d; color: var(--red); display: block; }
+.msg.ok { background: #10351a; color: var(--green); display: block; }
+audio { width: 100%; height: 34px; }
+#loginOverlay { position: fixed; inset: 0; background: var(--bg); display: flex;
+  align-items: center; justify-content: center; z-index: 100; }
+#loginOverlay .box { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 30px; width: 340px; }
+#loginOverlay h2 { margin: 0 0 16px; }
+.formrow { margin-bottom: 12px; }
+.formrow label { display: block; color: var(--muted); margin-bottom: 4px; font-size: 12px; }
+#statusDot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); display: inline-block; }
+#statusDot.up { background: var(--green); }
+#statusDot.down { background: var(--red); }
+.tabs { display: flex; gap: 4px; }
+.tabbody { display: none; }
+.tabbody.active { display: block; }
+.hidden { display: none !important; }
+.center { text-align: center; color: var(--muted); padding: 20px; }
+.freqnum { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+
+<div id="loginOverlay">
+  <div class="box">
+    <h2>OP25 Scanner Console</h2>
+    <div class="formrow"><label>Username</label><input type="text" id="loginUser" autocomplete="username"></div>
+    <div class="formrow"><label>Password</label><input type="password" id="loginPass" autocomplete="current-password"></div>
+    <button class="primary" id="loginBtn" style="width:100%">Sign in</button>
+    <div id="loginErr" class="msg err"></div>
+  </div>
+</div>
+
+<header>
+  <h1>OP25 Scanner</h1>
+  <span id="statusDot" title="connection"></span>
+  <nav>
+    <button data-tab="dash" class="active">Live</button>
+    <button data-tab="config">Config</button>
+    <button data-tab="sdr">SDR</button>
+    <button data-tab="status">Status</button>
+  </nav>
+  <div class="spacer"></div>
+  <span id="userLabel" style="color:var(--muted)"></span>
+  <button id="logoutBtn" class="hidden">Logout</button>
+</header>
+
+<main>
+  <!-- ===================== LIVE ===================== -->
+  <div class="tabbody active" id="tab-dash">
+    <div class="grid">
+      <div class="panel" style="grid-column: span 2">
+        <h3>Systems</h3>
+        <div id="systems" class="grid"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Active Voice / Receivers</h3>
+      <div id="channels" class="grid"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Streams</h3>
+      <div id="streams" class="grid"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Call Log</h3>
+      <div style="overflow-x:auto"><table id="calls">
+        <thead><tr><th>Time</th><th>System</th><th>TGID</th><th>Tag</th><th>Unit</th><th>Freq</th><th>Slot</th><th>Prio</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- ===================== CONFIG ===================== -->
+  <div class="tabbody" id="tab-config">
+    <div class="panel">
+      <h3>Configuration files</h3>
+      <div class="toolbar">
+        <button data-cfg="cfg.json">cfg.json (op25)</button>
+        <button data-cfg="stream.json">stream.json</button>
+        <button data-cfg="listen.json">listen.json</button>
+        <button data-cfg="tags/tgid.tsv">tgid.tsv</button>
+        <button data-cfg="tags/rid.tsv">rid.tsv</button>
+        <button id="cfgSaveBtn" class="primary">Save current</button>
+      </div>
+      <div id="cfgMsg" class="msg"></div>
+      <textarea id="cfgEditor"></textarea>
+      <div class="center">Editing <span id="cfgName"></span> &mdash; save triggers the relevant service restart.</div>
+    </div>
+
+    <div class="panel">
+      <h3>Control-plane users</h3>
+      <div id="usersList"></div>
+      <div class="toolbar" style="margin-top:10px">
+        <input type="text" id="newUser" placeholder="username">
+        <input type="password" id="newPass" placeholder="password (min 6 chars)">
+        <button id="addUserBtn" class="primary">Add user</button>
+      </div>
+      <div id="pwdMsg" class="msg"></div>
+      <div class="formrow" style="margin-top:12px">
+        <label>Change my password</label>
+        <input type="password" id="oldPass" placeholder="current password" style="margin-right:8px">
+        <input type="password" id="newPassMe" placeholder="new password">
+        <button id="chgPwdBtn">Change</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== SDR ===================== -->
+  <div class="tabbody" id="tab-sdr">
+    <div class="panel">
+      <h3>RTL-SDR Devices</h3>
+      <div class="toolbar">
+        <button id="scanBtn" class="primary">Scan for devices</button>
+      </div>
+      <div id="sdrResult"></div>
+    </div>
+    <div class="panel">
+      <h3>Tip</h3>
+      <div class="center" style="text-align:left">
+        op25 uses the <code class="mono">rtl=&lt;index&gt;</code> device argument.
+        Match <code class="mono">devices[0].args</code> in cfg.json to the index shown here.
+        USB devices must be passed to the container with
+        <code class="mono">--device=/dev/bus/usb</code> (see docker-compose.yml).
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== STATUS ===================== -->
+  <div class="tabbody" id="tab-status">
+    <div class="panel">
+      <h3>Services</h3>
+      <div id="procs"></div>
+    </div>
+    <div class="panel">
+      <h3>Logs</h3>
+      <div class="toolbar">
+        <select id="logSelect">
+          <option value="op25">op25</option>
+          <option value="streams">streams</option>
+          <option value="icecast">icecast</option>
+          <option value="web">web</option>
+        </select>
+        <button id="logRefresh">Refresh</button>
+        <button id="logAuto" class="primary">Auto-refresh on</button>
+      </div>
+      <pre id="logView" class="mono" style="background:#0a0d12;border:1px solid var(--border);border-radius:8px;padding:10px;min-height:300px;max-height:500px;overflow:auto;white-space:pre-wrap"></pre>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmtTime = ts => ts ? new Date(ts*1000).toLocaleTimeString() : "-";
+const fmtFreq = hz => hz ? (hz/1000000).toFixed(4)+" MHz" : "-";
+
+async function api(path, opts={}) {
+  const r = await fetch(path, {headers:{"Content-Type":"application/json"}, credentials:"same-origin", ...opts});
+  if (r.status === 401) { showLogin(); throw new Error("401"); }
+  const ct = r.headers.get("content-type") || "";
+  if (ct.includes("json")) {
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    return j;
+  }
+  if (!r.ok) throw new Error(r.statusText);
+  return r.text();
+}
+
+let me = null;
+async function refreshMe() {
+  try { me = await api("/api/me"); showApp(); }
+  catch(e) { showLogin(); }
+}
+
+function showLogin() {
+  $("loginOverlay").classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+}
+function showApp() {
+  $("loginOverlay").classList.add("hidden");
+  document.body.style.overflow = "";
+  $("userLabel").textContent = me.name + " (" + me.role + ")";
+  $("logoutBtn").classList.remove("hidden");
+  $("loginErr").classList.remove("msg");
+  $("loginErr").style.display = "none";
+  loadAll();
+  setInterval(loadAll, 3000);
+  setInterval(loadStatus, 4000);
+  startLogAuto();
+}
+
+$("loginBtn").onclick = async () => {
+  try {
+    const r = await fetch("/api/login", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({username:$("loginUser").value, password:$("loginPass").value})});
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error);
+    me = j; showApp();
+  } catch(e) { $("loginErr").textContent = e.message; $("loginErr").classList.add("msg"); $("loginErr").style.display="block"; }
+};
+$("logoutBtn").onclick = async () => { await fetch("/api/logout", {method:"POST"}); location.reload(); };
+
+// ---------------- tabs ----------------
+document.querySelectorAll("nav button").forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll("nav button").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    document.querySelectorAll(".tabbody").forEach(x => x.classList.remove("active"));
+    $("tab-" + b.dataset.tab).classList.add("active");
+  };
+});
+
+// ---------------- live telemetry ----------------
+let lastSnap = null;
+async function loadAll() {
+  try {
+    const d = await api("/api/telemetry");
+    $("statusDot").className = d.stale !== null && d.stale < 10 ? "up" : "down";
+    $("statusDot").title = d.stale === null ? "no telemetry" : "telemetry " + Math.round(d.stale) + "s old";
+    render(d); lastSnap = d;
+  } catch(e) {}
+}
+
+function trunkList(snap) {
+  const t = (snap.updates||[]).find(x => x && x.json_type === "trunk_update");
+  if (!t) return [];
+  return Object.keys(t).filter(k => /^\d+$/.test(k)).map(k => t[k]);
+}
+function chanList(snap) {
+  const c = (snap.updates||[]).find(x => x && x.json_type === "channel_update");
+  if (!c) return [];
+  return (c.channels||[]).map(id => c[id]).filter(Boolean);
+}
+
+function render(d) {
+  renderSystems(d);
+  renderChannels(d);
+  renderStreams(d);
+  renderCalls(d);
+}
+
+function renderSystems(d) {
+  const el = $("systems"); el.innerHTML = "";
+  const sys = trunkList(d);
+  if (!sys.length) { el.innerHTML = '<div class="center">No system data (waiting for trunking lock / control channel)</div>'; return; }
+  sys.forEach(s => {
+    const card = document.createElement("div"); card.className = "card";
+    const live = s.rxchan ? '<span class="badge live">CC</span>' : "";
+    const fdata = s.frequency_data || {};
+    const freqRows = Object.keys(fdata).slice(0,6).map(f => {
+      const fd = fdata[f];
+      const tg = (fd.tgids||[]).filter(Boolean).join(", ");
+      return `<div class="row"><span class="k mono freqnum">${fmtFreq(+f)}</span>
+              <span>${tg? "TG "+tg : (fd.type||"")} <span class="k">${fd.last_activity||""}</span></span></div>`;
+    }).join("");
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <b>${s.system||"System"}</b> ${live}
+      </div>
+      <div class="row"><span class="k">NAC</span><span class="mono">0x${(s.nac||0).toString(16).toUpperCase().padStart(3,"0")}</span></div>
+      <div class="row"><span class="k">WACN / SYSID</span><span class="mono">${s.wacn!=null && s.wacn>0? "0x"+s.wacn.toString(16):"-"} / ${s.sysid!=null? "0x"+s.sysid.toString(16).toUpperCase():s.syid!=null? "0x"+s.syid.toString(16):"-"}</span></div>
+      <div class="row"><span class="k">Site</span><span>${s.rfid} . ${s.stid}</span></div>
+      <div class="row"><span class="k">Control ch</span><span class="mono freqnum">${fmtFreq(s.rxchan)}</span></div>
+      <div class="row"><span class="k">TSBKs</span><span>${s.tsbk_count || 0}</span></div>
+      ${freqRows? '<div style="margin-top:6px;border-top:1px solid var(--border);padding-top:4px">'+freqRows+"</div>":""}`;
+    el.appendChild(card);
+  });
+}
+
+function renderChannels(d) {
+  const el = $("channels"); el.innerHTML = "";
+  const chans = chanList(d);
+  if (!chans.length) { el.innerHTML = '<div class="center">No receiver data</div>'; return; }
+  chans.forEach(c => {
+    const card = document.createElement("div"); card.className = "card";
+    const enc = c.encrypted ? '<span class="badge enc">ENC</span>' : "";
+    const emo = c.emergency ? '<span class="badge emo">EMERGENCY</span>' : "";
+    const live = c.tgid ? '<span class="badge live">&#9679;</span>' : "";
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <b>${c.name||("RX "+c.msgqid)}</b> ${live} ${enc} ${emo}
+      </div>
+      <div class="row"><span class="k">System</span><span>${c.system||"-"}</span></div>
+      <div class="row"><span class="k">Talkgroup</span><span><b>${c.tgid? "TG "+c.tgid : "idle"}</b> ${c.tag||""}</span></div>
+      <div class="row"><span class="k">Unit</span><span>${c.srcaddr? c.srcaddr + (c.srctag? " "+c.srctag : "") : "-"}</span></div>
+      <div class="row"><span class="k">Freq</span><span class="mono freqnum">${fmtFreq(c.freq)}</span></div>
+      <div class="row"><span class="k">Mode</span><span>${c.mode? "TDMA slot "+c.mode : "FDMA"}</span></div>
+      <div class="row"><span class="k">Tune err</span><span>${c.error!=null? c.error+" Hz":"-"}</span></div>`;
+    el.appendChild(card);
+  });
+}
+
+function renderStreams(d) {
+  const el = $("streams"); el.innerHTML = "";
+  const chans = chanList(d);
+  const byName = {};
+  chans.forEach(c => { if (c.stream) byName[c.stream] = c; });
+  if (!lastStreamsCfg) { el.innerHTML = '<div class="center">streams not loaded</div>'; return; }
+  lastStreamsCfg.streams.filter(s => s.enabled).forEach(s => {
+    const c = byName[s.name] || null;
+    const card = document.createElement("div"); card.className = "card";
+    const title = c && c.tgid
+      ? "TG "+c.tgid + (c.tag? " "+c.tag : "") + (c.srcaddr? " - Unit "+c.srcaddr+(c.srctag?" "+c.srctag:"") : "")
+      : "Idle";
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <b>${s.name}</b> <span class="badge ${c&&c.tgid?"live":"muted"}">${c&&c.tgid?"LIVE":"idle"}</span>
+      </div>
+      <div style="margin:6px 0" class="k">${title}</div>
+      <audio controls preload="none" src="/stream/${encodeURIComponent(s.mount)}"></audio>`;
+    el.appendChild(card);
+  });
+}
+let lastStreamsCfg = null;
+
+function renderCalls(d) {
+  const tb = $("calls").querySelector("tbody"); tb.innerHTML = "";
+  (d.calls||[]).slice(0,30).forEach(cl => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${fmtTime(cl.time)}</td><td>${cl.rcvrtag||cl.sysid||"-"}</td>
+      <td>${cl.tgid||"-"}</td><td>${cl.tgtag||""}</td><td>${cl.rid? cl.rid+(cl.rtag?" "+cl.rtag:""):"-"}</td>
+      <td class="mono freqnum">${fmtFreq(cl.freq)}</td><td>${cl.slot!=null? cl.slot:"-"}</td><td>${cl.prio||"-"}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+// ---------------- config ----------------
+let cfgData = null, cfgFiles = [];
+$("cfgName").textContent = "cfg.json";
+
+async function loadConfig() {
+  const d = await api("/api/config");
+  cfgData = d; cfgFiles = Object.keys(d.files);
+  lastStreamsCfg = d.files["stream.json"];
+  const active = activeCfg || "cfg.json";
+  $("cfgEditor").value = cfgData.files[active];
+  $("cfgName").textContent = active;
+  renderUsers(cfgData.files["users.json"]);
+}
+
+let activeCfg = "cfg.json";
+document.querySelectorAll("[data-cfg]").forEach(b => {
+  b.onclick = () => {
+    activeCfg = b.dataset.cfg;
+    $("cfgName").textContent = activeCfg;
+    $("cfgEditor").value = cfgData.files[activeCfg];
+  };
+});
+
+$("cfgSaveBtn").onclick = () => saveCfg(activeCfg);
+
+async function saveCfg(name) {
+  $("cfgMsg").className = "msg";
+  try {
+    const content = $("cfgEditor").value;
+    const body = name.endsWith(".json") ? {content: JSON.parse(content)} : {content};
+    const r = await api("/api/config/" + encodeURIComponent(name), {method:"PUT", body: JSON.stringify(body)});
+    $("cfgMsg").textContent = "Saved " + name + ": " + ((r.applied||[]).join(", ") || "ok");
+    $("cfgMsg").classList.add("ok");
+    await loadConfig();
+  } catch(e) {
+    $("cfgMsg").textContent = "Error: " + e.message;
+    $("cfgMsg").classList.add("err");
+  }
+}
+
+function renderUsers(usersCfg) {
+  const el = $("usersList"); el.innerHTML = "";
+  (usersCfg.users||[]).forEach(u => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)";
+    row.innerHTML = `<span><b>${u.username}</b> <span class="k">(${u.role}, ${u.name||""})</span></span>
+      <button class="danger" data-del="${u.username}">Remove</button>`;
+    row.querySelector("button").onclick = async () => {
+      try {
+        const files = cfgData.files;
+        files["users.json"].users = files["users.json"].users.filter(x => x.username !== u.username);
+        await api("/api/config/users.json", {method:"PUT", body: JSON.stringify({content: files["users.json"]})});
+        await loadConfig();
+      } catch(e) { alert(e.message); }
+    };
+    el.appendChild(row);
+  });
+}
+
+$("addUserBtn").onclick = async () => {
+  const un = $("newUser").value.trim(), pw = $("newPass").value;
+  if (!un || pw.length < 6) { alert("username required, password min 6 chars"); return; }
+  try {
+    await api("/api/users", {method:"POST", body: JSON.stringify({username: un, password: pw, role: "viewer", name: un})});
+    $("newUser").value = ""; $("newPass").value = "";
+    await loadConfig();
+  } catch(e) { alert(e.message); }
+};
+
+$("chgPwdBtn").onclick = async () => {
+  try {
+    await api("/api/change-password", {method:"POST", body: JSON.stringify({
+      old_password: $("oldPass").value, new_password: $("newPassMe").value})});
+    $("pwdMsg").textContent = "Password changed";
+    $("pwdMsg").className = "msg ok";
+    $("oldPass").value = ""; $("newPassMe").value = "";
+  } catch(e) { $("pwdMsg").textContent = "Error: " + e.message; $("pwdMsg").className = "msg err"; }
+};
+
+// ---------------- SDR ----------------
+$("scanBtn").onclick = async () => {
+  $("scanBtn").disabled = true; $("scanBtn").textContent = "Scanning...";
+  try {
+    const r = await api("/api/sdr/scan", {method:"POST"});
+    renderSdr(r);
+  } catch(e) { $("sdrResult").innerHTML = '<div class="msg err">'+e.message+'</div>'; }
+  $("scanBtn").disabled = false; $("scanBtn").textContent = "Scan for devices";
+};
+function renderSdr(r) {
+  const el = $("sdrResult"); el.innerHTML = "";
+  if (!r.ok) { el.innerHTML = '<div class="msg err">'+r.error+'</div>'; return; }
+  r.devices.forEach(d => {
+    el.innerHTML += `<div class="card" style="margin-bottom:8px">
+      <div class="row"><span class="k">Index</span><span><b>${d.index}</b></span></div>
+      <div class="row"><span class="k">Tuner</span><span>${d.tuner||"?"}</span></div>
+      <div class="row"><span class="k">Serial</span><span>${d.sn||"-"}</span></div>
+      <div class="row"><span class="k">Signal</span><span class="mono">${d.max_signal||""}</span></div>
+    </div>`;
+  });
+}
+
+// ---------------- status ----------------
+async function loadStatus() {
+  try {
+    const d = await api("/api/status");
+    const el = $("procs"); el.innerHTML = "";
+    (d.procs||[]).forEach(p => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)";
+      const up = p.state === "RUNNING";
+      row.innerHTML = `<span><b>${p.name}</b> <span class="badge ${up?"live":""}">${p.state}</span> <span class="k">${p.info}</span></span>
+        <button data-rst="${p.name}" ${up?"":"disabled"}>Restart</button>`;
+      row.querySelector("button").onclick = async () => { await api("/api/restart/"+p.name, {method:"POST"}); setTimeout(loadStatus, 800); };
+      el.appendChild(row);
+    });
+  } catch(e) {}
+}
+
+let logTimer = null, logOn = false;
+function startLogAuto() {
+  if (logTimer) return;
+  logTimer = setInterval(() => { if (logOn) loadLog(); }, 5000);
+}
+async function loadLog() {
+  const prog = $("logSelect").value;
+  try {
+    const d = await api("/api/log/"+prog+"?lines=400");
+    $("logView").textContent = d.log || "(empty)";
+    $("logView").scrollTop = $("logView").scrollHeight;
+  } catch(e) {}
+}
+$("logRefresh").onclick = loadLog;
+$("logSelect").onchange = loadLog;
+$("logAuto").onclick = () => { logOn = !logOn; $("logAuto").textContent = logOn ? "Auto-refresh on" : "Auto-refresh off"; $("logAuto").classList.toggle("primary", logOn); };
+
+// ---------------- boot ----------------
+(async () => {
+  await refreshMe();
+  try {
+    const s = await api("/api/config");
+    lastStreamsCfg = s.files["stream.json"];
+  } catch(e) {}
+  await loadConfig();
+  loadStatus();
+})();
+</script>
+</body>
+</html>

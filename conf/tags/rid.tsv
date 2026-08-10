@@ -1,0 +1,10 @@
+# Radio/unit ID tag file (tab separated: RID <TAB> Description)
+# Lines starting with '#' are ignored.
+# Example entries:
+1001	Dispatch Console 1
+1002	Dispatch Console 2
+2001	Unit 1
+2002	Unit 2
+3001	Fire Engine 1
+3002	Fire Engine 2
+4001	Ambulance 1

@@ -1,0 +1,65 @@
+{
+    "devices": [
+        {
+            "name": "rtl0",
+            "args": "rtl=0,rtl",
+            "rate": 2000000,
+            "gains": "lna:auto",
+            "ppm": 0,
+            "tunable": true,
+            "gain_mode": false,
+            "frequency": 856000000,
+            "offset": 0,
+            "usable_bw_pct": 0.85
+        }
+    ],
+    "channels": [
+        {
+            "name": "primary",
+            "device": "rtl0",
+            "frequency": 856000000,
+            "demod_type": "cqpsk",
+            "filter_type": "p25",
+            "if_rate": 48000,
+            "excess_bw": 0.2,
+            "symbol_rate": 4800,
+            "destination": "udp://127.0.0.1:23456",
+            "meta_stream_name": "primary",
+            "plot": "",
+            "crypt_keys": "",
+            "crypt_behavior": 0,
+            "enable_analog": "off"
+        }
+    ],
+    "trunking": {
+        "module": "tk_p25.py",
+        "chans": [
+            {
+                "sysname": "My P25 System",
+                "control_channel_list": "856.0000",
+                "offset": 0,
+                "nac": "0x4a2",
+                "wacn": "",
+                "sysid": "",
+                "phase2_tdma": 1,
+                "tdma_cc": false,
+                "hold_time": 3,
+                "skip_time": 4,
+                "timeout": 3,
+                "crypt_behavior": 0,
+                "whitelist": "",
+                "blacklist": "",
+                "tgid_tags_file": "/opt/op25/conf/tags/tgid.tsv",
+                "rid_tags_file": "/opt/op25/conf/tags/rid.tsv",
+                "center_frequency": 856000000,
+                "modulation": "cqpsk",
+                "callsign": ""
+            }
+        ]
+    },
+    "terminal": {
+        "module": "terminal.py",
+        "terminal_type": "5600",
+        "terminal_timeout": 5.0
+    }
+}

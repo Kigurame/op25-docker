@@ -1,0 +1,14 @@
+# Talkgroup tag file (tab separated: TGID <TAB> Description)
+# Lines starting with '#' are ignored.
+# Edit and save in the web UI. TAGS take effect when op25 is restarted.
+# Example entries:
+1	All Call
+310	Dispatch
+311	Dispatch 2
+312	EMS Dispatch
+410	Police Ops 1
+411	Police Ops 2
+510	Fire Dispatch
+511	Fire Ops
+710	Public Works
+910	Airport

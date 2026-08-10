@@ -1,0 +1,12 @@
+{
+    "users": [
+        {
+            "username": "admin",
+            "name": "Administrator",
+            "role": "admin",
+            "password_hash": "pbkdf2_sha256$260000$YwSdmXuDBlvX$befaa44883c307308880a1cfb30aa5d134c6cb23274feea192367ae3eb000ce0",
+            "created": "2026-01-01T00:00:00Z"
+        }
+    ],
+    "session_ttl_hours": 12
+}

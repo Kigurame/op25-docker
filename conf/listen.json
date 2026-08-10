@@ -1,0 +1,10 @@
+{
+    "auth": true,
+    "users": [
+        {
+            "username": "scanner",
+            "name": "LAN Listener",
+            "password": "listen123"
+        }
+    ]
+}
