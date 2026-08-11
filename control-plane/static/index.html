@@ -451,24 +451,33 @@ function renderChannels(d) {
 }
 
 function renderStreams(d) {
-  const el = $("streams"); el.innerHTML = "";
+  const el = $("streams");
   const chans = chanList(d);
   const byName = {};
   chans.forEach(c => { if (c.stream) byName[c.stream] = c; });
   if (!lastStreamsCfg) { el.innerHTML = '<div class="center">streams not loaded</div>'; return; }
   lastStreamsCfg.streams.filter(s => s.enabled).forEach(s => {
     const c = byName[s.name] || null;
-    const card = document.createElement("div"); card.className = "card";
     const title = c && c.tgid
       ? "TG "+c.tgid + (c.tag? " "+c.tag : "") + (c.srcaddr? " - Unit "+c.srcaddr+(c.srctag?" "+c.srctag:"") : "")
       : "Idle";
-    card.innerHTML = `
+    // Create the card + <audio> element once; rebuilds every telemetry poll
+    // would tear down the player mid-buffer and it would never play.
+    let card = document.getElementById("stream-card-"+s.name);
+    if (!card) {
+      card = document.createElement("div"); card.className = "card"; card.id = "stream-card-"+s.name;
+      card.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <b>${s.name}</b> <span class="badge ${c&&c.tgid?"live":"muted"}">${c&&c.tgid?"LIVE":"idle"}</span>
+        <b>${s.name}</b> <span class="badge muted">idle</span>
       </div>
-      <div style="margin:6px 0" class="k">${title}</div>
+      <div style="margin:6px 0" class="k">Idle</div>
       <audio controls preload="none" src="/stream/${encodeURIComponent(s.mount)}"></audio>`;
-    el.appendChild(card);
+      el.appendChild(card);
+    }
+    const badge = card.querySelector(".badge");
+    badge.className = "badge " + (c&&c.tgid?"live":"muted");
+    badge.textContent = c&&c.tgid ? "LIVE" : "idle";
+    card.querySelector(".k").textContent = title;
   });
 }
 let lastStreamsCfg = null;
@@ -579,6 +588,7 @@ const CONFIG_GUIDE = {
       { path: "streams[].codec", set: "mp3 or aac", note: "Encoder format." },
       { path: "streams[].bitrate_kbps", set: "48", note: "Encoder bitrate; higher = better quality, more bandwidth." },
       { path: "streams[].channels", set: "1 or 2", note: "Channel count of the mixed audio pipe." },
+      { path: "streams[].gain_db", set: "6", note: "Volume boost in dB (-30..30, 0 = off); limiter caps loud audio." },
       { path: "streams[].icecast_name / description / genre", set: "text", note: "Now-playing / stream metadata." }
     ],
     examples: [

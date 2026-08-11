@@ -140,6 +140,8 @@ def validate_streams(s):
             raise ConfigError("%s.codec must be 'mp3' or 'aac'" % prefix)
         _require_int(st.get("bitrate_kbps", 48), "%s.bitrate_kbps" % prefix, 1)
         _require_int(st.get("channels", 2), "%s.channels" % prefix, 1, 2)
+        if "gain_db" in st:
+            _require_int(st["gain_db"], "%s.gain_db" % prefix, -30, 30)
         for key in ("icecast_name", "icecast_description", "icecast_genre", "icecast_url"):
             if key in st:
                 _require_str(st[key], "%s.%s" % (prefix, key), allow_empty=True)

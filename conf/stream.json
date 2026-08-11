@@ -2,7 +2,7 @@
     "_template_notes": {
         "about": "Template for op25-docker. Change the passwords and match udp_port to cfg.json, then save (restarts icecast + streams). Full walkthrough: docs/SETUP.md.",
         "icecast": "Change source_password / admin_password / supervisor_password from the defaults. listener_auth true means listeners must use an account from listen.json.",
-        "streams": "One entry per Icecast mount. 'udp_port' must match the channel 'destination' port in cfg.json. 'mount' is the listening URL path (e.g. /primary.mp3), 'codec' is mp3 or aac, 'bitrate_kbps' sets encoder quality."
+        "streams": "One entry per Icecast mount. 'udp_port' must match the channel 'destination' port in cfg.json. 'mount' is the listening URL path (e.g. /primary.mp3), 'codec' is mp3 or aac, 'bitrate_kbps' sets encoder quality, 'gain_db' boosts volume (-30..30, 0 = off)."
     },
     "icecast": {
         "host": "127.0.0.1",
@@ -23,6 +23,7 @@
             "codec": "mp3",
             "bitrate_kbps": 48,
             "channels": 2,
+            "gain_db": 6,
             "icecast_name": "OP25 - My P25 System",
             "icecast_description": "Live P25 Phase 1/2 trunked scanner audio",
             "icecast_genre": "Scanner",

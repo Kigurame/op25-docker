@@ -143,6 +143,7 @@ class StreamPump:
         self.enabled = bool(stream.get("enabled", True))
         self.channels = int(stream.get("channels", 2))
         self.bitrate = int(stream.get("bitrate_kbps", 48))
+        self.gain_db = int(stream.get("gain_db", 6))
         self.proc = None
         self.last_audio = 0.0
         self.sock_a = None
@@ -161,12 +162,16 @@ class StreamPump:
         port = self.icecast["port"]
         ac = self.channels
         url = "icecast://source:%s@%s:%s%s" % (urllib.parse.quote(source_pw), host, port, self.mount)
+        # Apply gain_db so decoded scanner audio (often recorded low) is audible;
+        # a limiter caps the boost so loud traffic doesn't clip.
+        af = ["-af", "volume=%ddB,alimiter=limit=0.9" % self.gain_db] if self.gain_db else []
         codec = self.stream.get("codec", "mp3")
         if codec == "mp3":
             return [
                 FFMPEG, "-loglevel", "warning",
                 "-f", "s16le", "-ar", "8000", "-ac", str(ac), "-i", "pipe:0",
                 "-c:a", "libmp3lame", "-b:a", "%dk" % self.bitrate,
+            ] + af + [
                 "-content_type", "audio/mpeg", "-f", "mp3", url,
             ]
         elif codec == "aac":
@@ -174,6 +179,7 @@ class StreamPump:
                 FFMPEG, "-loglevel", "warning",
                 "-f", "s16le", "-ar", "8000", "-ac", str(ac), "-i", "pipe:0",
                 "-c:a", "aac", "-b:a", "%dk" % self.bitrate,
+            ] + af + [
                 "-content_type", "audio/aac", "-f", "adts", url,
             ]
         return None
