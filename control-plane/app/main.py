@@ -329,9 +329,12 @@ async def health():
 
 # ------------------------------------------------------------------ static spa
 
+NO_CACHE = {"Cache-Control": "no-store"}
+
+
 @app.get("/")
 async def spa():
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"), headers=NO_CACHE)
 
 
 @app.get("/{path}")
@@ -340,4 +343,4 @@ async def spa_fallback(path: str):
         fp = os.path.join(STATIC_DIR, path)
         if os.path.isfile(fp):
             return FileResponse(fp)
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"), headers=NO_CACHE)

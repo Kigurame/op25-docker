@@ -29,6 +29,10 @@ monitoring, call history, and configuration.
 - **Config editing** – edit `cfg.json`, `stream.json`, `users.json`, `listen.json`
   and the talkgroup/radio tag tables from the web UI; saving re-renders runtime
   configs and restarts the affected service.
+- **Setup wizard** – the Config tab includes a step-by-step wizard: enter the
+  SDR device index, control channel frequency (MHz), NAC, band and Phase 2
+  option, and it generates + saves `cfg.json` for you (the raw editor and a
+  detailed field reference remain available for power users).
 - **Role-based login** – `admin` (full access) and `viewer` (read-only) users,
   PBKDF2 password hashing, HMAC-signed session cookies.
 - **Stream proxy** – authenticated `/stream/<mount>` endpoint on the web port for
@@ -89,20 +93,17 @@ cd op25-docker
 docker compose up -d --build      # first build compiles op25; takes a while
 ```
 
-Point the control channel at your system (`conf/cfg.json` →
-`trunking.chans[0].control_channel_list`), then restart op25 from the web UI
-(**Control plane → Services → restart op25**) or:
-
-```bash
-docker compose restart op25
-```
-
 Open the web UI at <http://localhost:8080> and log in with the default account:
 
 ```
 username: admin
 password: admin123
 ```
+
+Then click **Config → Setup wizard** and supply your SDR device index and P25
+system's control channel frequency, NAC, band and Phase 2 setting — it writes
+`cfg.json` for you. Or edit `conf/cfg.json` manually (see
+[docs/SETUP.md](docs/SETUP.md) for a full walkthrough).
 
 **Change this password immediately** (Control plane → Change my password) and
 update the other defaults in `conf/stream.json` / `conf/listen.json` (see
@@ -227,6 +228,9 @@ ports 8080/8000 rather than publishing them directly.
 - **USB device not visible in the container** – pass
   `--device=/dev/bus/usb:/dev/bus/usb` (already in `docker-compose.yml`) and, on
   some hosts, add `privileged: true`.
+- **Config editor shows `[object Object]`** – your browser is serving a cached
+  copy of the web UI. Hard-refresh (Ctrl+F5). The UI ships inside the container
+  image, so after pulling new code rebuild with `docker compose up -d --build`.
 
 ## License
 

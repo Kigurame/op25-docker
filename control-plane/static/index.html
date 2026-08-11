@@ -76,6 +76,36 @@ audio { width: 100%; height: 34px; }
 .hidden { display: none !important; }
 .center { text-align: center; color: var(--muted); padding: 20px; }
 .freqnum { font-variant-numeric: tabular-nums; }
+#wizardOverlay { position: fixed; inset: 0; background: rgba(4,7,12,.75); display: none;
+  align-items: center; justify-content: center; z-index: 200; }
+#wizardOverlay.open { display: flex; }
+#wizardOverlay .box { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  width: 640px; max-width: 94vw; max-height: 90vh; display: flex; flex-direction: column; }
+#wizardOverlay .whead { display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+  border-bottom: 1px solid var(--border); }
+#wizardOverlay .whead h2 { margin: 0; font-size: 15px; flex: 1; }
+#wizardOverlay .wsteps { display: flex; gap: 4px; padding: 10px 18px 0; flex-wrap: wrap; }
+#wizardOverlay .wstep { font-size: 11px; color: var(--muted); padding: 3px 9px; border-radius: 10px;
+  border: 1px solid var(--border); }
+#wizardOverlay .wstep.cur { background: var(--accent); border-color: var(--accent); color: #fff; }
+#wizardOverlay .wstep.done { color: var(--green); border-color: var(--green); }
+#wizardOverlay .wbody { padding: 16px 18px; overflow-y: auto; flex: 1; }
+#wizardOverlay .wfoot { display: flex; justify-content: space-between; gap: 8px;
+  padding: 12px 18px; border-top: 1px solid var(--border); }
+#wizardOverlay .wfoot .spacer { flex: 1; }
+#wizardOverlay .wf { margin-bottom: 14px; }
+#wizardOverlay .wf label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+#wizardOverlay .wf .hint { color: var(--muted); font-size: 11.5px; margin-top: 3px; }
+#wizardOverlay input[type=text], #wizardOverlay input[type=number], #wizardOverlay select {
+  width: 100%; background: #0a0d12; border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); padding: 7px 10px; font-size: 13px; }
+#wizardOverlay input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; }
+#wizardOverlay .ck { display: flex; align-items: center; gap: 8px; }
+#wizardOverlay details { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
+#wizardOverlay details summary { cursor: pointer; color: var(--accent); font-size: 13px; }
+#wizardOverlay pre { background: #0a0d12; border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; overflow: auto; font-size: 12px; max-height: 46vh; margin: 0; }
+#wizardOverlay .err { color: var(--red); font-size: 13px; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -138,6 +168,7 @@ audio { width: 100%; height: 34px; }
     <div class="panel">
       <h3>Configuration files</h3>
       <div class="toolbar">
+        <button id="cfgWizardBtn" class="primary">Setup wizard</button>
         <button data-cfg="cfg.json">cfg.json (op25)</button>
         <button data-cfg="stream.json">stream.json</button>
         <button data-cfg="listen.json">listen.json</button>
@@ -149,7 +180,7 @@ audio { width: 100%; height: 34px; }
       <textarea id="cfgEditor"></textarea>
       <div id="cfgSynopsis" class="cfghelp"></div>
       <div id="cfgExamples" class="cfghelp"></div>
-      <div class="center">Editing <span id="cfgName"></span> &mdash; save triggers the relevant service restart.</div>
+      <div class="center">Editing <span id="cfgName"></span> &mdash; save triggers the relevant service restart. If the editor ever shows <code class="mono">[object Object]</code>, hard-refresh (Ctrl+F5); the UI ships inside the container image, so rebuild with <code class="mono">docker compose up -d --build</code> after updating the repo.</div>
     </div>
 
     <div class="panel">
@@ -212,6 +243,24 @@ audio { width: 100%; height: 34px; }
     </div>
   </div>
 </main>
+
+<div id="wizardOverlay">
+  <div class="box">
+    <div class="whead">
+      <h2>Setup wizard</h2>
+      <button id="wizardClose">Close</button>
+    </div>
+    <div class="wsteps" id="wizardSteps"></div>
+    <div class="wbody" id="wizardBody"></div>
+    <div id="wizardErr" class="err"></div>
+    <div class="wfoot">
+      <button id="wizardBack">Back</button>
+      <div class="spacer"></div>
+      <button id="wizardNext" class="primary">Next</button>
+      <button id="wizardApply" class="primary hidden">Apply &amp; restart</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -394,11 +443,42 @@ let cfgData = null, cfgFiles = [];
 $("cfgName").textContent = "cfg.json";
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const fileToText = (name, v) => name.endsWith(".json") ? JSON.stringify(v, null, 2) : v;
+const fileToText = (name, v) => {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "string") return v;
+  return JSON.stringify(v, null, 2);
+};
 
 const CONFIG_GUIDE = {
   "cfg.json": {
-    synopsis: "op25 receiver settings: which RTL-SDR device to use (rtl=<index>), the channel it tunes, and the P25 trunking system to follow (control channel, NAC, modulation).",
+    synopsis: "op25 receiver settings: which RTL-SDR dongle to use (rtl=<index>), the channel it tunes, and the P25 trunking system to follow (control channel, NAC, modulation).",
+    howto: [
+      "In the SDR tab click \"Scan for devices\" and note the 0-based index of your dongle (0, 1, ...).",
+      "Set devices[0].args to \"rtl=<index>,rtl\" and devices[0].frequency to your control channel in Hz.",
+      "Set channels[0].frequency to the same control channel in Hz.",
+      "Set channels[0].destination to udp://127.0.0.1:<port> — the port must match an enabled stream's udp_port in stream.json (default 23456).",
+      "In trunking.chans[0] set: sysname (any label), control_channel_list (control channel in MHz — comma-separate alternates for control-channel hunting), nac (hex, e.g. \"0x4a2\"), phase2_tdma (1 if the system uses Phase 2 TDMA), modulation (cqpsk for 700/800 MHz, fm for VHF/UHF).",
+      "Optionally set devices[0].ppm (crystal drift correction) and trunking.chans[0].whitelist / blacklist (comma-separated talkgroup IDs).",
+      "Save — op25 restarts automatically; check the op25 log for a successful decode."
+    ],
+    fields: [
+      { path: "devices[].args", set: "rtl=<index>,rtl", note: "RTL-SDR dongle index from the SDR scan." },
+      { path: "devices[].rate", set: "2000000", note: "Sample rate in Hz (default is fine)." },
+      { path: "devices[].gains", set: "LNA:39", note: "Tuner gain in dB; raise only if the decode is weak." },
+      { path: "devices[].ppm", set: "0", note: "Crystal error correction in ppm; adjust if audio drifts." },
+      { path: "devices[].frequency", set: "856000000", note: "Receive center frequency in HERTZ — set to your control channel." },
+      { path: "channels[].frequency", set: "856000000", note: "Must equal the control channel frequency, in HERTZ." },
+      { path: "channels[].destination", set: "udp://127.0.0.1:23456", note: "Must match a stream udp_port in stream.json." },
+      { path: "channels[].demod_type / filter_type / symbol_rate", set: "cqpsk / p25 / 4800", note: "P25 defaults; leave unless you know otherwise." },
+      { path: "trunking.chans[].sysname", set: "My P25 System", note: "Any label for this system." },
+      { path: "trunking.chans[].control_channel_list", set: "856.0000", note: "Control channel in MEGAHERTZ; comma-separate alternates to allow CC hunting." },
+      { path: "trunking.chans[].nac", set: "0x4a2", note: "System Network Access Code in hex." },
+      { path: "trunking.chans[].phase2_tdma", set: "1 or 0", note: "1 if the system uses Phase 2 TDMA, 0 for Phase 1 only." },
+      { path: "trunking.chans[].modulation", set: "cqpsk or fm", note: "cqpsk for 700/800 MHz, fm for VHF/UHF." },
+      { path: "trunking.chans[].whitelist / blacklist", set: "1,2,3", note: "Comma-separated talkgroup IDs to restrict or block decoding." },
+      { path: "trunking.chans[].wacn / sysid", set: "\"\"", note: "Optional; learned from the control channel if left empty." },
+      { path: "trunking.chans[].center_frequency", set: "856000000", note: "Same control channel frequency in HERTZ." }
+    ],
     examples: [
       { title: "700/800 MHz trunked system (Phase 1+2)", code: `{
   "devices": [
@@ -432,6 +512,26 @@ const CONFIG_GUIDE = {
   },
   "stream.json": {
     synopsis: "Icecast server settings and audio streams. Each stream picks up the decoded audio from the UDP port set in cfg.json (channels[].destination) and broadcasts it on an Icecast mount.",
+    howto: [
+      "Change icecast.source_password, icecast.admin_password and icecast.supervisor_password from the defaults.",
+      "Decide whether listeners must log in: icecast.listener_auth true uses the accounts in listen.json, false opens the feed.",
+      "For each entry in streams[]: udp_port must match a channel destination port in cfg.json, mount is the listening URL path (e.g. /primary.mp3), codec is mp3 or aac, bitrate_kbps sets the encoder quality.",
+      "Save — icecast + streams restart automatically."
+    ],
+    fields: [
+      { path: "icecast.host / port", set: "127.0.0.1 / 8000", note: "Where Icecast listens (defaults are fine)." },
+      { path: "icecast.source_password", set: "changeme-source", note: "Used by stream_runner to push audio — change it." },
+      { path: "icecast.admin_password", set: "changeme-admin", note: "Icecast admin web UI password — change it." },
+      { path: "icecast.supervisor_password", set: "changeme-supervisor", note: "Used by the control plane to restart services — change it." },
+      { path: "icecast.listener_auth", set: "true or false", note: "true = listeners must use a listen.json account." },
+      { path: "icecast.max_clients", set: "64", note: "Total simultaneous listeners across all mounts." },
+      { path: "streams[].udp_port", set: "23456", note: "Must match the channel destination port in cfg.json." },
+      { path: "streams[].mount", set: "/primary.mp3", note: "Listening URL path for this stream." },
+      { path: "streams[].codec", set: "mp3 or aac", note: "Encoder format." },
+      { path: "streams[].bitrate_kbps", set: "48", note: "Encoder bitrate; higher = better quality, more bandwidth." },
+      { path: "streams[].channels", set: "1 or 2", note: "Channel count of the mixed audio pipe." },
+      { path: "streams[].icecast_name / description / genre", set: "text", note: "Now-playing / stream metadata." }
+    ],
     examples: [
       { title: "One MP3 stream on UDP 23456", code: `{
   "icecast": {
@@ -458,6 +558,17 @@ const CONFIG_GUIDE = {
   },
   "listen.json": {
     synopsis: "Icecast listener accounts, used when stream.json sets icecast.listener_auth to true. Listeners use these credentials to play the stream.",
+    howto: [
+      "Keep auth true and add one entry per listener under users[].",
+      "Change the default listener password.",
+      "Save — icecast + streams restart automatically."
+    ],
+    fields: [
+      { path: "auth", set: "true", note: "Master switch; must be true for these accounts to matter." },
+      { path: "users[].username", set: "scanner", note: "Listener login name." },
+      { path: "users[].name", set: "LAN Listener", note: "Display name (shown in Icecast admin)." },
+      { path: "users[].password", set: "listen123", note: "Listener password — change it." }
+    ],
     examples: [
       { title: "A listener account", code: `{
   "auth": true,
@@ -469,12 +580,29 @@ const CONFIG_GUIDE = {
   },
   "tags/tgid.tsv": {
     synopsis: "Talkgroup labels shown in the web UI. One line per talkgroup: ID, TAB, label, and optional TAB + priority (0-9). Save and restart op25 to apply.",
+    howto: [
+      "One talkgroup per line: number, TAB, label (third TAB-separated field is an optional priority 0-9).",
+      "Save, then restart op25 (Services tab) for the labels to appear."
+    ],
+    fields: [
+      { path: "col 1", set: "1001", note: "Talkgroup ID." },
+      { path: "col 2", set: "Dispatch", note: "Label shown in the UI." },
+      { path: "col 3 (optional)", set: "5", note: "Priority 0-9 (highest = most important)." }
+    ],
     examples: [
       { title: "Format", code: "1001\tDispatch\n1002\tFire\n1003\tEMS\t5" }
     ]
   },
   "tags/rid.tsv": {
     synopsis: "Radio (unit) ID labels shown in the web UI. One line per radio: ID, TAB, label. Save and restart op25 to apply.",
+    howto: [
+      "One radio per line: number, TAB, label.",
+      "Save, then restart op25 (Services tab) for the labels to appear."
+    ],
+    fields: [
+      { path: "col 1", set: "1234567", note: "Radio / unit ID." },
+      { path: "col 2", set: "Unit 12", note: "Label shown in the UI." }
+    ],
     examples: [
       { title: "Format", code: "1234567\tUnit 12\n1234568\tCar 33" }
     ]
@@ -486,7 +614,7 @@ function renderCfgHelp(name, val) {
   const syn = $("cfgSynopsis"), ex = $("cfgExamples");
   if (!guide) { syn.innerHTML = ""; ex.innerHTML = ""; return; }
 
-  let html = `<div class="item">${esc(guide.synopsis)}</div>`;
+  let html = `<div class="item"><b>What this file does.</b> ${esc(guide.synopsis)}</div>`;
   const notes = (val && typeof val === "object" && !Array.isArray(val)) ? val["_template_notes"] : null;
   if (typeof notes === "string") {
     html += `<div class="item"><span class="term">What to change:</span> ${esc(notes)}</div>`;
@@ -496,6 +624,18 @@ function renderCfgHelp(name, val) {
       if (k === "about") return;
       html += `<div class="item"><span class="term">${esc(k)}</span> — ${esc(v)}</div>`;
     });
+  }
+  if (guide.howto && guide.howto.length) {
+    html += `<h4>How to configure</h4><ol>`;
+    guide.howto.forEach(s => { html += `<li>${esc(s)}</li>`; });
+    html += `</ol>`;
+  }
+  if (guide.fields && guide.fields.length) {
+    html += `<h4>Field reference</h4><table><thead><tr><th>Field</th><th>Set to</th><th>Notes</th></tr></thead><tbody>`;
+    guide.fields.forEach(f => {
+      html += `<tr><td class="mono">${esc(f.path)}</td><td class="mono">${esc(f.set)}</td><td>${esc(f.note)}</td></tr>`;
+    });
+    html += `</tbody></table>`;
   }
   syn.innerHTML = html;
 
@@ -543,6 +683,238 @@ async function saveCfg(name) {
     $("cfgMsg").classList.add("err");
   }
 }
+
+// ---------------- setup wizard ----------------
+function wizBase() {
+  const c = cfgData && cfgData.files && cfgData.files["cfg.json"];
+  return (c && typeof c === "object") ? JSON.parse(JSON.stringify(c)) : {};
+}
+
+function wizUdpPort() {
+  const s = cfgData && cfgData.files && cfgData.files["stream.json"];
+  const st = (s && s.streams || []).find(x => x && x.enabled !== false);
+  return (st && st.udp_port) || 23456;
+}
+
+function wizDefaults() {
+  const c = wizBase();
+  const dev = c.devices && c.devices[0] || {};
+  const ch = c.channels && c.channels[0] || {};
+  const sys = c.trunking && c.trunking.chans && c.trunking.chans[0] || {};
+  const idx = (dev.args || "").match(/rtl=(\d+)/);
+  const cc = (sys.control_channel_list || "").split(",").map(s=>s.trim()).filter(Boolean);
+  const prim = cc[0] || (ch.frequency ? Number(ch.frequency/1e6).toFixed(4) : (dev.frequency ? Number(dev.frequency/1e6).toFixed(4) : "856.0000"));
+  const alts = cc.slice(1).join(", ");
+  return {
+    sdr_index: idx ? idx[1] : "0",
+    ppm: dev.ppm != null ? String(dev.ppm) : "0",
+    gains: dev.gains || "LNA:39",
+    sysname: sys.sysname || "My P25 System",
+    freq: prim,
+    alts: alts,
+    band: (sys.modulation || "cqpsk") === "fm" ? "vhf" : "800",
+    nac: sys.nac || "0x4a2",
+    phase2: sys.phase2_tdma === 1 || sys.phase2_tdma === true,
+    whitelist: sys.whitelist || "",
+    blacklist: sys.blacklist || ""
+  };
+}
+
+const WIZARD_STEPS = [
+  {
+    title: "1 \u00b7 SDR device",
+    render(d) { return `
+      <div class="wf"><label>SDR device index</label>
+        <input type="number" id="wz-sdr-index" min="0" value="${esc(d.sdr_index)}" required>
+        <button id="wz-sdr-scan" class="btn" style="margin-top:6px">Scan for devices</button>
+        <div class="hint" id="wz-sdr-hint">0-based index of your RTL-SDR dongle (see the SDR tab for details).</div></div>
+      <div class="wf"><label>PPM correction</label>
+        <input type="number" id="wz-ppm" value="${esc(d.ppm)}">
+        <div class="hint">Crystal drift in ppm. Leave 0 to start.</div></div>
+      <div class="wf"><label>Tuner gain (dB)</label>
+        <input type="text" id="wz-gains" value="${esc(d.gains)}">
+        <div class="hint">e.g. LNA:39. Raise only if the decode is weak.</div></div>`;
+    }
+  },
+  {
+    title: "2 \u00b7 System",
+    render(d) { return `
+      <div class="wf"><label>System name</label>
+        <input type="text" id="wz-sysname" value="${esc(d.sysname)}"></div>
+      <div class="wf"><label>Control channel frequency (MHz)</label>
+        <input type="text" id="wz-freq" value="${esc(d.freq)}" required>
+        <div class="hint">Your P25 control channel, e.g. 856.1625. Used as the tune frequency and control_channel_list.</div></div>
+      <div class="wf"><label>Alternate control channels (MHz, comma-separated, optional)</label>
+        <input type="text" id="wz-alts" value="${esc(d.alts)}">
+        <div class="hint">Lets op25 hunt to a backup control channel if the primary is unavailable.</div></div>
+      <div class="wf"><label>Band</label>
+        <select id="wz-band">
+          <option value="800" ${d.band==="800"?"selected":""}>700/800 MHz (cqpsk)</option>
+          <option value="vhf" ${d.band==="vhf"?"selected":""}>VHF/UHF (fm)</option>
+        </select></div>
+      <div class="wf"><label>NAC (hex)</label>
+        <input type="text" id="wz-nac" value="${esc(d.nac)}" required>
+        <div class="hint">Network Access Code, e.g. 0x4a2.</div></div>
+      <div class="wf ck"><label>Phase 2 TDMA</label>
+        <input type="checkbox" id="wz-phase2" ${d.phase2?"checked":""}>
+        <span class="hint" style="margin:0">Enable if the system uses Phase 2 TDMA talkgroups.</span></div>`;
+    }
+  },
+  {
+    title: "3 \u00b7 Advanced",
+    render(d) { return `
+      <details open><summary>Talkgroup restrictions (optional)</summary>
+        <div class="wf" style="margin-top:10px"><label>Whitelist (only decode these talkgroups)</label>
+          <input type="text" id="wz-whitelist" value="${esc(d.whitelist)}">
+          <div class="hint">Comma-separated talkgroup IDs, e.g. 1001,1002.</div></div>
+        <div class="wf"><label>Blacklist (never decode these talkgroups)</label>
+          <input type="text" id="wz-blacklist" value="${esc(d.blacklist)}">
+          <div class="hint">Comma-separated talkgroup IDs to block.</div></div>
+      </details>
+      <div class="hint">Everything else (sample rate, demod, filter, symbol rate) keeps its current value.</div>`;
+    }
+  },
+  {
+    title: "4 \u00b7 Review",
+    render() { return `
+      <div class="hint" style="margin-bottom:8px">Review the generated cfg.json below, then click Apply &amp; restart. op25 will be restarted automatically.</div>
+      <pre id="wz-preview"></pre>`;
+    }
+  }
+];
+
+let wizStep = 0, wizState = {};
+
+function collectWizardStep(i) {
+  if (i === 0) {
+    wizState.sdr_index = $("wz-sdr-index").value.trim();
+    wizState.ppm = $("wz-ppm").value.trim();
+    wizState.gains = $("wz-gains").value.trim();
+    const idx = parseInt(wizState.sdr_index, 10);
+    if (!Number.isInteger(idx) || idx < 0) throw new Error("Enter a valid SDR device index (0 or higher)");
+  } else if (i === 1) {
+    wizState.sysname = $("wz-sysname").value.trim();
+    wizState.freq = $("wz-freq").value.trim();
+    wizState.alts = $("wz-alts").value.trim();
+    wizState.band = $("wz-band").value;
+    wizState.nac = $("wz-nac").value.trim();
+    wizState.phase2 = $("wz-phase2").checked;
+    if (!wizState.sysname) throw new Error("Enter a system name");
+    const f = parseFloat(wizState.freq);
+    if (!isFinite(f) || f <= 0) throw new Error("Enter a valid control channel frequency in MHz");
+    if (!wizState.nac) throw new Error("Enter the system NAC (hex), e.g. 0x4a2");
+  } else if (i === 2) {
+    wizState.whitelist = $("wz-whitelist").value.trim();
+    wizState.blacklist = $("wz-blacklist").value.trim();
+  }
+}
+
+function renderWizardStep(i) {
+  wizStep = i;
+  $("wizardErr").textContent = "";
+  $("wizardSteps").innerHTML = WIZARD_STEPS.map((s, k) => {
+    let cls = "wstep";
+    if (k < i) cls += " done";
+    if (k === i) cls += " cur";
+    return `<span class="${cls}">${esc(s.title)}</span>`;
+  }).join("");
+  $("wizardBody").innerHTML = WIZARD_STEPS[i].render(wizState);
+  $("wizardBack").classList.toggle("hidden", i === 0);
+  const last = i === WIZARD_STEPS.length - 1;
+  $("wizardNext").classList.toggle("hidden", last);
+  $("wizardApply").classList.toggle("hidden", !last);
+  if (i === 0) wireWizardScan();
+  if (last) $("wz-preview").textContent = JSON.stringify(buildWizardCfg(), null, 2);
+}
+
+function wireWizardScan() {
+  $("wz-sdr-scan").onclick = async () => {
+    const btn = $("wz-sdr-scan");
+    btn.disabled = true; btn.textContent = "Scanning...";
+    try {
+      const r = await api("/api/sdr/scan", {method:"POST"});
+      if (!r.ok) throw new Error(r.error || "no devices");
+      const devs = r.devices || [];
+      if (!devs.length) { $("wz-sdr-hint").textContent = "No RTL-SDR devices found. Check USB passthrough (docker-compose.yml)."; return; }
+      $("wz-sdr-index").value = devs[0].index;
+      wizState.sdr_index = String(devs[0].index);
+      $("wz-sdr-hint").textContent = "Found " + devs.length + " device(s): " +
+        devs.map(x => "index " + x.index + (x.tuner ? " (" + x.tuner + ")" : "")).join(", ") + ". Using index " + devs[0].index + ".";
+    } catch(e) { $("wz-sdr-hint").textContent = "Scan failed: " + e.message; }
+    btn.disabled = false; btn.textContent = "Scan for devices";
+  };
+}
+
+function buildWizardCfg() {
+  const base = wizBase();
+  const idx = parseInt(wizState.sdr_index, 10);
+  const freqMHz = parseFloat(wizState.freq);
+  const hz = Math.round(freqMHz * 1e6);
+  const ccList = [Number(freqMHz).toFixed(4)]
+    .concat((wizState.alts || "").split(",").map(s=>s.trim()).filter(Boolean).map(a => Number(parseFloat(a)).toFixed(4)))
+    .join(",");
+  let nac = (wizState.nac || "").trim();
+  if (nac && !/^0x/i.test(nac)) nac = "0x" + nac;
+  const modulation = wizState.band === "vhf" ? "fm" : "cqpsk";
+  const phase2 = wizState.phase2 ? 1 : 0;
+
+  const dev = base.devices && base.devices[0] || {};
+  dev.args = "rtl=" + idx + ",rtl";
+  dev.ppm = parseInt(wizState.ppm || "0", 10) || 0;
+  if (wizState.gains) dev.gains = wizState.gains;
+  dev.frequency = hz;
+  if (!base.devices || !base.devices.length) base.devices = [dev];
+  else base.devices[0] = dev;
+
+  const ch = base.channels && base.channels[0] || {};
+  ch.name = ch.name || "primary";
+  ch.device = ch.device || "rtl0";
+  ch.frequency = hz;
+  ch.destination = "udp://127.0.0.1:" + wizUdpPort();
+  if (!base.channels || !base.channels.length) base.channels = [ch];
+  else base.channels[0] = ch;
+
+  if (!base.trunking) base.trunking = {};
+  if (!base.trunking.module) base.trunking.module = "tk_p25.py";
+  if (!base.trunking.chans || !base.trunking.chans.length) base.trunking.chans = [{}];
+  const sys = base.trunking.chans[0];
+  sys.sysname = wizState.sysname;
+  sys.control_channel_list = ccList;
+  sys.nac = nac;
+  sys.phase2_tdma = phase2;
+  sys.modulation = modulation;
+  sys.center_frequency = hz;
+  sys.whitelist = wizState.whitelist || "";
+  sys.blacklist = wizState.blacklist || "";
+  return base;
+}
+
+async function applyWizardCfg(cfg) {
+  const r = await api("/api/config/cfg.json", {method:"PUT", body: JSON.stringify({content: cfg})});
+  $("wizardOverlay").classList.remove("open");
+  $("cfgMsg").textContent = "Saved cfg.json via wizard: " + ((r.applied||[]).join(", ") || "ok");
+  $("cfgMsg").className = "msg ok";
+  activeCfg = "cfg.json";
+  await loadConfig();
+}
+
+$("cfgWizardBtn").onclick = () => {
+  wizState = wizDefaults();
+  renderWizardStep(0);
+  $("wizardOverlay").classList.add("open");
+};
+$("wizardClose").onclick = () => $("wizardOverlay").classList.remove("open");
+$("wizardBack").onclick = () => renderWizardStep(wizStep - 1);
+$("wizardNext").onclick = () => {
+  try { collectWizardStep(wizStep); renderWizardStep(wizStep + 1); }
+  catch(e) { $("wizardErr").textContent = e.message; }
+};
+$("wizardApply").onclick = async () => {
+  try {
+    collectWizardStep(wizStep);
+    await applyWizardCfg(buildWizardCfg());
+  } catch(e) { $("wizardErr").textContent = e.message; }
+};
 
 function renderUsers(usersCfg) {
   const el = $("usersList"); el.innerHTML = "";
