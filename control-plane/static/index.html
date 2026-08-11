@@ -47,6 +47,13 @@ th { color: var(--muted); font-weight: 600; }
 .mono { font-family: ui-monospace, "Cascadia Code", Menlo, monospace; font-size: 12.5px; }
 textarea { width: 100%; min-height: 340px; background: #0a0d12; color: var(--text);
   border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; resize: vertical; }
+.cfghelp { background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-top: 10px; font-size: 13px; }
+.cfghelp h4 { margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; font-size: 12px; }
+.cfghelp .item { margin-bottom: 6px; }
+.cfghelp .term { color: var(--accent); font-family: ui-monospace, "Cascadia Code", Menlo, monospace; font-size: 12px; }
+.cfghelp details { margin-top: 8px; }
+.cfghelp summary { cursor: pointer; color: var(--accent); }
+.cfghelp pre { background: #0a0d12; border: 1px solid var(--border); border-radius: 6px; padding: 10px; overflow-x: auto; font-size: 12px; margin: 8px 0 0; white-space: pre; }
 input[type=text], input[type=password] { background: #0a0d12; border: 1px solid var(--border);
   border-radius: 6px; color: var(--text); padding: 7px 10px; font-size: 13px; }
 .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
@@ -140,6 +147,8 @@ audio { width: 100%; height: 34px; }
       </div>
       <div id="cfgMsg" class="msg"></div>
       <textarea id="cfgEditor"></textarea>
+      <div id="cfgSynopsis" class="cfghelp"></div>
+      <div id="cfgExamples" class="cfghelp"></div>
       <div class="center">Editing <span id="cfgName"></span> &mdash; save triggers the relevant service restart.</div>
     </div>
 
@@ -384,13 +393,127 @@ function renderCalls(d) {
 let cfgData = null, cfgFiles = [];
 $("cfgName").textContent = "cfg.json";
 
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fileToText = (name, v) => name.endsWith(".json") ? JSON.stringify(v, null, 2) : v;
+
+const CONFIG_GUIDE = {
+  "cfg.json": {
+    synopsis: "op25 receiver settings: which RTL-SDR device to use (rtl=<index>), the channel it tunes, and the P25 trunking system to follow (control channel, NAC, modulation).",
+    examples: [
+      { title: "700/800 MHz trunked system (Phase 1+2)", code: `{
+  "devices": [
+    { "name": "rtl0", "args": "rtl=0,rtl", "rate": 2000000, "gains": "LNA:39", "ppm": 0, "tunable": true, "frequency": 856000000 }
+  ],
+  "channels": [
+    { "name": "primary", "device": "rtl0", "frequency": 856000000, "demod_type": "cqpsk", "filter_type": "p25", "if_rate": 48000, "symbol_rate": 4800, "destination": "udp://127.0.0.1:23456", "meta_stream_name": "primary" }
+  ],
+  "trunking": {
+    "module": "tk_p25.py",
+    "chans": [
+      { "sysname": "My 800 MHz System", "control_channel_list": "856.0000", "nac": "0x4a2", "phase2_tdma": 1, "modulation": "cqpsk" }
+    ]
+  }
+}` },
+      { title: "VHF/UHF trunked system (Phase 1, FM)", code: `{
+  "devices": [
+    { "name": "rtl0", "args": "rtl=0,rtl", "rate": 2000000, "gains": "LNA:39", "ppm": 0, "tunable": true, "frequency": 151000000 }
+  ],
+  "channels": [
+    { "name": "primary", "device": "rtl0", "frequency": 151000000, "demod_type": "fsk", "filter_type": "p25", "if_rate": 48000, "symbol_rate": 4800, "destination": "udp://127.0.0.1:23456", "meta_stream_name": "primary" }
+  ],
+  "trunking": {
+    "module": "tk_p25.py",
+    "chans": [
+      { "sysname": "My VHF System", "control_channel_list": "151.0000", "nac": "0x293", "phase2_tdma": 0, "modulation": "fm" }
+    ]
+  }
+}` }
+    ]
+  },
+  "stream.json": {
+    synopsis: "Icecast server settings and audio streams. Each stream picks up the decoded audio from the UDP port set in cfg.json (channels[].destination) and broadcasts it on an Icecast mount.",
+    examples: [
+      { title: "One MP3 stream on UDP 23456", code: `{
+  "icecast": {
+    "host": "127.0.0.1", "port": 8000,
+    "source_password": "changeme-source", "admin_password": "changeme-admin", "supervisor_password": "changeme-supervisor",
+    "listener_auth": true, "max_clients": 64, "max_listeners_per_mount": 16
+  },
+  "streams": [
+    { "name": "primary", "enabled": true, "udp_port": 23456, "mount": "/primary.mp3", "codec": "mp3", "bitrate_kbps": 48, "channels": 2, "icecast_name": "OP25 Scanner", "icecast_description": "Live P25 trunked scanner audio", "icecast_genre": "Scanner" }
+  ]
+}` },
+      { title: "Two streams: MP3 (UDP 23456) + AAC (UDP 23458)", code: `{
+  "icecast": {
+    "host": "127.0.0.1", "port": 8000,
+    "source_password": "changeme-source", "admin_password": "changeme-admin", "supervisor_password": "changeme-supervisor",
+    "listener_auth": true, "max_clients": 64, "max_listeners_per_mount": 16
+  },
+  "streams": [
+    { "name": "primary", "enabled": true, "udp_port": 23456, "mount": "/primary.mp3", "codec": "mp3", "bitrate_kbps": 48, "channels": 2 },
+    { "name": "primary_aac", "enabled": true, "udp_port": 23458, "mount": "/primary.aac", "codec": "aac", "bitrate_kbps": 64, "channels": 2 }
+  ]
+}` }
+    ]
+  },
+  "listen.json": {
+    synopsis: "Icecast listener accounts, used when stream.json sets icecast.listener_auth to true. Listeners use these credentials to play the stream.",
+    examples: [
+      { title: "A listener account", code: `{
+  "auth": true,
+  "users": [
+    { "username": "scanner", "name": "LAN Listener", "password": "changeme-listen" }
+  ]
+}` }
+    ]
+  },
+  "tags/tgid.tsv": {
+    synopsis: "Talkgroup labels shown in the web UI. One line per talkgroup: ID, TAB, label, and optional TAB + priority (0-9). Save and restart op25 to apply.",
+    examples: [
+      { title: "Format", code: "1001\tDispatch\n1002\tFire\n1003\tEMS\t5" }
+    ]
+  },
+  "tags/rid.tsv": {
+    synopsis: "Radio (unit) ID labels shown in the web UI. One line per radio: ID, TAB, label. Save and restart op25 to apply.",
+    examples: [
+      { title: "Format", code: "1234567\tUnit 12\n1234568\tCar 33" }
+    ]
+  }
+};
+
+function renderCfgHelp(name, val) {
+  const guide = CONFIG_GUIDE[name];
+  const syn = $("cfgSynopsis"), ex = $("cfgExamples");
+  if (!guide) { syn.innerHTML = ""; ex.innerHTML = ""; return; }
+
+  let html = `<div class="item">${esc(guide.synopsis)}</div>`;
+  const notes = (val && typeof val === "object" && !Array.isArray(val)) ? val["_template_notes"] : null;
+  if (typeof notes === "string") {
+    html += `<div class="item"><span class="term">What to change:</span> ${esc(notes)}</div>`;
+  } else if (notes && typeof notes === "object") {
+    html += `<div class="item"><span class="term">What to change:</span></div>`;
+    Object.entries(notes).forEach(([k, v]) => {
+      if (k === "about") return;
+      html += `<div class="item"><span class="term">${esc(k)}</span> — ${esc(v)}</div>`;
+    });
+  }
+  syn.innerHTML = html;
+
+  let ehtml = `<h4>Examples</h4>`;
+  (guide.examples || []).forEach(e => {
+    ehtml += `<details><summary>${esc(e.title)}</summary><pre>${esc(e.code)}</pre></details>`;
+  });
+  ex.innerHTML = ehtml;
+}
+
 async function loadConfig() {
   const d = await api("/api/config");
   cfgData = d; cfgFiles = Object.keys(d.files);
   lastStreamsCfg = d.files["stream.json"];
   const active = activeCfg || "cfg.json";
-  $("cfgEditor").value = cfgData.files[active];
+  $("cfgEditor").value = fileToText(active, cfgData.files[active]);
   $("cfgName").textContent = active;
+  renderCfgHelp(active, cfgData.files[active]);
   renderUsers(cfgData.files["users.json"]);
 }
 
@@ -399,7 +522,8 @@ document.querySelectorAll("[data-cfg]").forEach(b => {
   b.onclick = () => {
     activeCfg = b.dataset.cfg;
     $("cfgName").textContent = activeCfg;
-    $("cfgEditor").value = cfgData.files[activeCfg];
+    $("cfgEditor").value = fileToText(activeCfg, cfgData.files[activeCfg]);
+    renderCfgHelp(activeCfg, cfgData.files[activeCfg]);
   };
 });
 
