@@ -33,6 +33,8 @@ POLL_INTERVAL = 1.0          # seconds between telemetry polls
 META_INTERVAL = 3.0          # seconds between metadata refresh attempts
 AUDIO_FRAME = 160            # samples per channel per packet @8kHz
 SILENCE_INTERVAL = 0.02      # seconds between silence frames
+SAMPLE_RATE = 8000           # Hz, audio pipeline rate
+MAX_PCM_BUDGET = 1.0         # seconds of catch-up audio the pump may queue
 
 
 def log(msg):
@@ -217,6 +219,17 @@ class StreamPump:
 
     def run(self):
         self.bind_sockets()
+        # Real-time pacing: OP25 sends UDP audio in bursts, and once the
+        # kernel receive buffer holds a backlog the select() below returns
+        # immediately, so the pump would drain frames at CPU speed and feed
+        # ffmpeg ahead of real time. That makes Icecast serve the stream
+        # faster than real time and every client hears it choppy or stalls.
+        # A token bucket caps writes to the real-time PCM rate; when input
+        # runs ahead we drop whole frames instead of letting latency grow.
+        pcm_rate = self.channels * SAMPLE_RATE * 2  # real-time bytes/sec
+        max_budget = int(pcm_rate * MAX_PCM_BUDGET)
+        budget = max_budget
+        last_tic = time.time()
         while self.keep_running:
             if self.proc is None or self.proc.poll() is not None:
                 if self.proc is not None and self.proc.poll() is not None:
@@ -234,6 +247,10 @@ class StreamPump:
             except (OSError, ValueError):
                 time.sleep(0.1)
                 continue
+
+            now = time.time()
+            budget = min(max_budget, budget + (now - last_tic) * pcm_rate)
+            last_tic = now
 
             buf_a = buf_b = None
             flag_a = flag_b = None
@@ -264,9 +281,14 @@ class StreamPump:
                 continue  # drop queued audio
 
             if buf_a is None and buf_b is None:
-                self._write(self.silence())
+                frame = self.silence()
             else:
-                self._write(self.interleave(buf_a, buf_b))
+                frame = self.interleave(buf_a, buf_b)
+
+            if budget >= len(frame):
+                self._write(frame)
+                budget -= len(frame)
+            # else input outran real time: drop the frame to stay in sync
 
         self._close()
 
