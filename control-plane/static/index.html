@@ -502,6 +502,7 @@ const CONFIG_GUIDE = {
       "In the SDR tab click \"Scan for devices\" and note the 0-based index of your dongle (0, 1, ...).",
       "Set devices[0].args to \"rtl=<index>,rtl\" and devices[0].frequency to your control channel in Hz.",
       "Set channels[0].frequency to the same control channel in Hz.",
+      "Set channels[0].trunking_sysname to the exact trunking.chans[0].sysname — this links the channel to the trunking system (without it op25 monitors the frequency as a conventional channel and never hunts the control channel).",
       "Set channels[0].destination to udp://127.0.0.1:<port> — the port must match an enabled stream's udp_port in stream.json (default 23456).",
       "In trunking.chans[0] set: sysname (any label), control_channel_list (control channel in MHz — comma-separate alternates for control-channel hunting), nac (hex, e.g. \"0x4a2\"), phase2_tdma (1 if the system uses Phase 2 TDMA), modulation (cqpsk for 700/800 MHz, fm for VHF/UHF).",
       "Optionally set devices[0].ppm (crystal drift correction) and trunking.chans[0].whitelist / blacklist (comma-separated talkgroup IDs).",
@@ -515,6 +516,7 @@ const CONFIG_GUIDE = {
       { path: "devices[].frequency", set: "856000000", note: "Receive center frequency in HERTZ — set to your control channel." },
       { path: "channels[].frequency", set: "856000000", note: "Must equal the control channel frequency, in HERTZ." },
       { path: "channels[].destination", set: "udp://127.0.0.1:23456", note: "Must match a stream udp_port in stream.json." },
+      { path: "channels[].trunking_sysname", set: "My P25 System", note: "Must equal the trunking.chans[].sysname — links the channel to the trunking system so op25 hunts the control channel. Missing this = conventional mode, no CC decode." },
       { path: "channels[].demod_type / filter_type / symbol_rate", set: "cqpsk / p25 / 4800", note: "P25 defaults; leave unless you know otherwise." },
       { path: "trunking.chans[].sysname", set: "My P25 System", note: "Any label for this system." },
       { path: "trunking.chans[].control_channel_list", set: "856.0000", note: "Control channel in MEGAHERTZ; comma-separate alternates to allow CC hunting." },
@@ -532,7 +534,7 @@ const CONFIG_GUIDE = {
     { "name": "rtl0", "args": "rtl=0,rtl", "rate": 2000000, "gains": "LNA:39", "ppm": 0, "tunable": true, "frequency": 856000000 }
   ],
   "channels": [
-    { "name": "primary", "device": "rtl0", "frequency": 856000000, "demod_type": "cqpsk", "filter_type": "p25", "if_rate": 48000, "symbol_rate": 4800, "destination": "udp://127.0.0.1:23456", "meta_stream_name": "primary" }
+    { "name": "primary", "device": "rtl0", "frequency": 856000000, "trunking_sysname": "My 800 MHz System", "demod_type": "cqpsk", "filter_type": "p25", "if_rate": 48000, "symbol_rate": 4800, "destination": "udp://127.0.0.1:23456", "meta_stream_name": "primary" }
   ],
   "trunking": {
     "module": "tk_p25.py",
@@ -546,7 +548,7 @@ const CONFIG_GUIDE = {
     { "name": "rtl0", "args": "rtl=0,rtl", "rate": 2000000, "gains": "LNA:39", "ppm": 0, "tunable": true, "frequency": 151000000 }
   ],
   "channels": [
-    { "name": "primary", "device": "rtl0", "frequency": 151000000, "demod_type": "fsk", "filter_type": "p25", "if_rate": 48000, "symbol_rate": 4800, "destination": "udp://127.0.0.1:23456", "meta_stream_name": "primary" }
+    { "name": "primary", "device": "rtl0", "frequency": 151000000, "trunking_sysname": "My VHF System", "demod_type": "fsk", "filter_type": "p25", "if_rate": 48000, "symbol_rate": 4800, "destination": "udp://127.0.0.1:23456", "meta_stream_name": "primary" }
   ],
   "trunking": {
     "module": "tk_p25.py",
@@ -917,6 +919,7 @@ function buildWizardCfg() {
   ch.name = ch.name || "primary";
   ch.device = ch.device || "rtl0";
   ch.frequency = hz;
+  ch.trunking_sysname = wizState.sysname;
   ch.destination = "udp://127.0.0.1:" + wizUdpPort();
   if (!base.channels || !base.channels.length) base.channels = [ch];
   else base.channels[0] = ch;

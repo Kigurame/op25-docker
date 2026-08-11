@@ -56,11 +56,19 @@ def validate_cfg(cfg):
         raise ConfigError("cfg.json must contain a non-empty 'channels' list")
     if "trunking" not in cfg or "chans" not in cfg["trunking"]:
         raise ConfigError("cfg.json must contain a 'trunking' section with 'chans'")
+    sysnames = set(s.get("sysname") for s in cfg["trunking"]["chans"])
     for ch in cfg["channels"]:
         if "device" not in ch:
             raise ConfigError("each channel needs a 'device' field")
         if "destination" not in ch:
             raise ConfigError("each channel needs a 'destination' field (udp://host:port)")
+        # A channel without a matching trunking_sysname becomes a plain
+        # conventional receiver and never hunts the control channel.
+        if not ch.get("trunking_sysname"):
+            raise ConfigError("each channel needs a 'trunking_sysname' matching a system name in trunking.chans[]")
+        if ch["trunking_sysname"] not in sysnames:
+            raise ConfigError("channel '%s' trunking_sysname '%s' does not match any trunking.chans[].sysname (%s)"
+                              % (ch.get("name", "?"), ch["trunking_sysname"], ", ".join(sorted(sysnames))))
     for sys in cfg["trunking"]["chans"]:
         if "sysname" not in sys:
             raise ConfigError("each trunked system needs a 'sysname'")

@@ -166,7 +166,9 @@ it the default. When trying to diagnose a system that won't decode:
    you should see `Tuning to frequency <your CC>` and the trunking module
    assigning a control-channel receiver (`needs control channel receiver` /
    `attempt to assign control channel receiver`). Nothing = the channel never
-   even tunes.
+   even tunes. A steady `conv process_qmsg: type(-1)` at level 5 means the
+   channel is running in **conventional** mode — it is missing a
+   `trunking_sysname` in cfg.json (see "Channel ↔ stream mapping").
 2. Click **Dump decoded talkgroups to log**: any talkgroup that has been seen
    (with an activity counter) proves the control channel is being decoded.
    An empty dump means no decode.
@@ -228,6 +230,14 @@ set the channel's `destination` to `udp://127.0.0.1:<udp_port>`, e.g.:
 ```json
 { "name": "primary", "destination": "udp://127.0.0.1:23456", ... }
 ```
+
+Crucially, each channel must also set `trunking_sysname` to the exact
+`trunking.chans[].sysname` of the system it belongs to. Without it op25 runs
+the channel as a plain conventional receiver and **never hunts the control
+channel** — it will sit on the frequency logging
+`conv process_qmsg: type(-1)` (idle) forever. The config editor and setup
+wizard set this automatically, and saving a `cfg.json` with a missing or
+mismatched `trunking_sysname` is now rejected with a clear error.
 
 `stream_runner` maps that port to the channel index reported by op25 telemetry,
 so now-playing metadata follows the active talkgroup automatically.
