@@ -88,14 +88,16 @@ class IcecastMetaUpdater:
         key = (mount, title)
         if self._last.get(mount) == title:
             return
-        song = urllib.parse.quote(title, safe="+ ,:/")
+        # song is a query-string value: encode everything (safe="") so spaces,
+        # '+', '#' etc. are percent-encoded instead of producing invalid URLs.
+        song = urllib.parse.quote(title, safe="")
         url = "%s?mount=%s&mode=updinfo&song=%s" % (self.base, urllib.parse.quote(mount), song)
         try:
             req = urllib.request.Request(url, headers=self.headers)
             with urllib.request.urlopen(req, timeout=1.0):
                 pass
             self._last[mount] = title
-        except (URLError, HTTPError, OSError) as e:
+        except (URLError, HTTPError, OSError, ValueError) as e:
             log("metadata update failed for %s: %s" % (mount, e))
 
     def forget(self, mount):
