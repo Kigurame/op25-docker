@@ -368,12 +368,19 @@ async def proxy_stream(mount: str, request: Request):
     # duplicate leading slash, which Icecast rejects.
     url = "http://%s:%d/%s" % (host, port, mount.lstrip("/"))
     try:
-        client = httpx.Client(auth=creds if creds else None, follow_redirects=True)
+        # Async client + streaming: a sync httpx.Client inside an async
+        # generator would block the event loop on every socket read, starving
+        # the telemetry endpoints the Live tab polls, and its 5s default read
+        # timeout would kill the stream during brief pauses. timeout=None keeps
+        # the connection open across silent gaps.
+        client = httpx.AsyncClient(auth=creds if creds else None, follow_redirects=True, timeout=None)
         req = client.build_request("GET", url, headers={"User-Agent": "op25-web"})
-        upstream = client.send(req, stream=True)
+        upstream = await client.send(req, stream=True)
     except httpx.HTTPError as e:
         return JSONResponse({"error": "icecast unreachable: %s" % e}, status_code=502)
     if upstream.status_code != 200:
+        await upstream.aclose()
+        await client.aclose()
         return JSONResponse({"error": "icecast returned %d" % upstream.status_code}, status_code=502)
 
     headers = {}
@@ -382,13 +389,13 @@ async def proxy_stream(mount: str, request: Request):
         if v:
             headers[h] = v
 
-    def gen():
+    async def gen():
         try:
-            for chunk in upstream.iter_raw():
+            async for chunk in upstream.aiter_raw():
                 yield chunk
         finally:
-            upstream.close()
-            client.close()
+            await upstream.aclose()
+            await client.aclose()
 
     return StreamingResponse(gen(), media_type=headers.get("content-type", "audio/mpeg"), headers=headers)
 
