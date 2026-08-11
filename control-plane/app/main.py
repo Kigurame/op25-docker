@@ -363,7 +363,10 @@ async def proxy_stream(mount: str, request: Request):
         if users:
             creds = (users[0]["username"], users[0].get("password", ""))
 
-    url = "http://%s:%d/%s" % (host, port, urllib.parse.quote(mount))
+    # mount arrives URL-decoded (e.g. "/primary.mp3" from "/stream/%2Fprimary.mp3"
+    # as requested by the browser), so build the upstream path without a
+    # duplicate leading slash, which Icecast rejects.
+    url = "http://%s:%d/%s" % (host, port, mount.lstrip("/"))
     try:
         client = httpx.Client(auth=creds if creds else None, follow_redirects=True)
         req = client.build_request("GET", url, headers={"User-Agent": "op25-web"})
