@@ -115,8 +115,7 @@ RUN python3 -m venv /opt/op25/venv \
         python-multipart==0.0.9
 
 # Layout
-RUN mkdir -p /etc/op25 /var/log/op25 /var/log/icecast2 /var/lib/icecast2 /var/run/op25 \
-    && ln -sf /opt/op25/defaults /opt/op25/conf
+RUN mkdir -p /etc/op25 /var/log/op25 /var/log/icecast2 /var/lib/icecast2 /var/run/op25 /opt/op25/conf
 
 WORKDIR /opt/op25
 

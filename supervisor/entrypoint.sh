@@ -9,9 +9,10 @@ set -e
 CONF_DIR="${OP25_CONF_DIR:-/opt/op25/conf}"
 
 # Copy default configs into the volume if it is empty (first boot with a mounted volume)
-if [ -d "$CONF_DIR" ] && [ ! -f "$CONF_DIR/stream.json" ]; then
+if [ -d "$CONF_DIR" ] && [ ! -f "$CONF_DIR/stream.json" ] \
+   && [ "$(readlink -f "$CONF_DIR")" != "/opt/op25/defaults" ]; then
     echo "[entrypoint] initializing $CONF_DIR with defaults"
-    cp -a /opt/op25/defaults/. "$CONF_DIR/"
+    cp -an /opt/op25/defaults/. "$CONF_DIR/"
 fi
 
 # Render runtime configs (icecast.xml, htpasswd, supervisord.conf) from the
