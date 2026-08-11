@@ -119,6 +119,7 @@ affected services automatically. Then:
 |---------|---------------------|
 | `op25` shows `BACKOFF` / no device | no dongle reachable, or wrong `rtl=<index>`. Scan in the SDR tab, fix `devices[0].args`, add `privileged: true` if USB is flaky. |
 | No decode / "invalid" on the control channel | wrong control channel frequency or NAC. Confirm both in `cfg.json`; try adding CC alternates to `control_channel_list`. |
+| No tuning / decode and not sure why | **Status → op25 diagnostics**: set log level 9 and watch the op25 log for `Tuning to frequency`, `attempt to assign control channel receiver`; click *Dump decoded talkgroups to log* (empty = no decode). **SDR → Dongle diagnostics**: `PLL not locked!` / `r82xx_set_freq: failed` means the tuner can't lock (USB power/hardware). |
 | Stream connects but silent | channel `destination` port does not match `streams[].udp_port`; or stream `enabled: false`; or listener auth blocks you (use `listen.json` creds). |
 | Audio garbled / drift over time | tune `devices[0].ppm` (crystal error). Start near the correct value and adjust a few ppm at a time until the constellation/decode is clean. |
 | Nothing but encrypted talkgroups | system uses full-time encryption; op25 cannot decode it (`crypt_behavior`/`crypt_keys` only cover systems you have keys for). |

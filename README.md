@@ -35,6 +35,13 @@ monitoring, call history, and configuration.
   detailed field reference remain available for power users).
 - **Role-based login** – `admin` (full access) and `viewer` (read-only) users,
   PBKDF2 password hashing, HMAC-signed session cookies.
+- **op25 diagnostics** – live log-verbosity control (`Status` tab): bump op25
+  from quiet to full channel-control tracing without a restart, and ask it to
+  dump every decoded talkgroup with activity counters straight into its log.
+- **SDR dongle diagnostics** – the `SDR` tab runs `rtl_test` on a dongle and
+  reports whether it can actually open, tune and produce samples, flagging
+  tuner-lock/USB failures (`PLL not locked!`, `r82xx_set_freq: failed`) that
+  otherwise only show up buried in the op25 log.
 - **Stream proxy** – authenticated `/stream/<mount>` endpoint on the web port for
   clients that should not talk to Icecast directly.
 - **Supervisor-managed** – all four programs (op25, streams, icecast, web) are
@@ -137,6 +144,37 @@ listener auth on/off, max clients) and one or more streams:
 | `channels` | channel count for the mixed stereo pipe |
 | `icecast_name` / `icecast_description` / `icecast_genre` | stream metadata |
 
+### Checking whether op25 is receiving / decoding
+
+`cfg.json` has a top-level `verbosity` key (0–10, default 2) that sets how
+much op25 writes to its log (`op25.log`):
+
+| level | shows |
+|-------|-------|
+| 0 | errors only |
+| 1 | startup, tuning failures (`Unable to tune ...`) |
+| 2 | tag-file loading |
+| 5 | call/conventional activity, talkgroup counters |
+| 9 | every hardware tune step (`Tuning to frequency ...`, `Hardware tune ...`) |
+| 10 | full channel-control trace (very spammy) |
+
+Change it live from the web UI (**Status → op25 diagnostics**) — no restart
+needed — or edit `verbosity` in `cfg.json` and restart the container to make
+it the default. When trying to diagnose a system that won't decode:
+
+1. **Status → op25 diagnostics** → set log level 9 and watch the op25 log:
+   you should see `Tuning to frequency <your CC>` and the trunking module
+   assigning a control-channel receiver (`needs control channel receiver` /
+   `attempt to assign control channel receiver`). Nothing = the channel never
+   even tunes.
+2. Click **Dump decoded talkgroups to log**: any talkgroup that has been seen
+   (with an activity counter) proves the control channel is being decoded.
+   An empty dump means no decode.
+3. **SDR → Dongle diagnostics** → run `rtl_test`: a healthy dongle reports
+   `OK` and a noise floor around −40 to −90 dB. A dongle that can't tune
+   prints `PLL not locked!` / `r82xx_set_freq: failed` — a hardware/USB/power
+   problem that no frequency setting will fix.
+
 ### Web stream proxy
 
 If you prefer not to expose Icecast, the control plane proxies the feed
@@ -162,6 +200,10 @@ SPA served at `/`; API at `/api/*`. Notable endpoints:
 | `POST /api/restart/{program}` | restart op25 / streams / icecast / web |
 | `GET /api/log/{program}` | tail a program's log |
 | `POST /api/sdr/scan` | list detected RTL-SDR devices (for setting `rtl=<index>`) |
+| `POST /api/sdr/diag/{index}` | deep-diagnose one dongle (`rtl_test`): tuner lock, sample stream, noise floor |
+| `GET /api/op25/debug` | configured op25 verbosity + the available levels |
+| `POST /api/op25/debug/{level}` | change op25's live log verbosity (0–10) without a restart |
+| `POST /api/op25/dump-tgids` | print all decoded talkgroups (with counters) to the op25 log |
 | `GET /stream/{mount}` | authenticated Icecast proxy |
 | `GET /api/health` | healthcheck for Docker |
 
@@ -217,6 +259,15 @@ ports 8080/8000 rather than publishing them directly.
   index (`Wrong rtlsdr device index given`). Check **Control plane → Logs → op25**
   and adjust `devices[].args`. Without any USB dongle attached, op25 cannot run
   by design; the rest of the stack (web, streams, Icecast) still comes up.
+- **op25 runs but never tunes / decodes any control frequency** – use the
+  diagnostics (see "Checking whether op25 is receiving / decoding" above).
+  `[R82XX] PLL not locked!` / `r82xx_set_freq: failed=-1` in the op25 log means
+  the R820T tuner itself won't lock — check USB power, cabling/contact and the
+  dongle; run **SDR → Dongle diagnostics** to confirm. If tuning works but
+  nothing decodes, verify the NAC, `phase2_tdma` and `modulation` in
+  `cfg.json`, and try comma-separated alternates in `control_channel_list` for
+  control-channel hunting. Raise the log level to 9 in the Status tab and watch
+  for `Tuning to frequency` / `attempt to assign control channel receiver`.
 - **Listeners get 401** – Icecast listener auth is on. Use the credentials from
   `conf/listen.json`, or disable auth by setting `icecast.listener_auth: false`
   in `conf/stream.json`.

@@ -57,6 +57,11 @@ textarea { width: 100%; min-height: 340px; background: #0a0d12; color: var(--tex
 input[type=text], input[type=password] { background: #0a0d12; border: 1px solid var(--border);
   border-radius: 6px; color: var(--text); padding: 7px 10px; font-size: 13px; }
 .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.toolbar label { color: var(--muted); font-size: 12.5px; }
+.toolbar select, .toolbar input[type=number] { background: #0a0d12; border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); padding: 7px 10px; font-size: 13px; }
+.hint { color: var(--muted); font-size: 12px; }
+.hint code { font-size: 11.5px; }
 .msg { padding: 8px 12px; border-radius: 6px; margin: 8px 0; font-size: 13px; display: none; }
 .msg.err { background: #3a1d1d; color: var(--red); display: block; }
 .msg.ok { background: #10351a; color: var(--green); display: block; }
@@ -211,6 +216,24 @@ audio { width: 100%; height: 34px; }
       <div id="sdrResult"></div>
     </div>
     <div class="panel">
+      <h3>Dongle diagnostics</h3>
+      <div class="toolbar">
+        <label>Device index
+          <input type="number" id="diagIndex" min="0" value="0" style="width:70px">
+        </label>
+        <button id="diagBtn" class="primary">Run rtl_test diagnostic</button>
+      </div>
+      <div id="diagResult"></div>
+      <div class="hint" style="margin-top:6px">
+        Runs <code class="mono">rtl_test</code> on the dongle for a few seconds
+        and reports whether it can actually receive. Look for the tuner errors
+        (<span class="mono">PLL not locked!</span>,
+        <span class="mono">r82xx_set_freq: failed</span>) that also appear in
+        the op25 log when a dongle cannot tune &mdash; usually a USB power /
+        dongle hardware problem, not a configuration one.
+      </div>
+    </div>
+    <div class="panel">
       <h3>Tip</h3>
       <div class="center" style="text-align:left">
         op25 uses the <code class="mono">rtl=&lt;index&gt;</code> device argument.
@@ -226,6 +249,29 @@ audio { width: 100%; height: 34px; }
     <div class="panel">
       <h3>Services</h3>
       <div id="procs"></div>
+    </div>
+    <div class="panel">
+      <h3>op25 diagnostics</h3>
+      <div class="toolbar">
+        <select id="dbgLevel">
+          <option value="0">0 &middot; quiet</option>
+          <option value="1">1 &middot; normal</option>
+          <option value="2">2 &middot; verbose</option>
+          <option value="5">5 &middot; debug (call/CC activity)</option>
+          <option value="9">9 &middot; tuning (hardware tune)</option>
+          <option value="10">10 &middot; full (very spammy)</option>
+        </select>
+        <button id="dbgSet" class="primary">Set live log level</button>
+        <button id="dbgDump">Dump decoded talkgroups to log</button>
+      </div>
+      <div class="hint" id="dbgHint"></div>
+      <div class="hint" style="margin-top:6px">
+        Higher levels make op25 log every tuning step, trunking assignment and
+        channel-control message &mdash; ideal for checking whether a signal is
+        being received. Watch the <b>op25</b> log below. Live changes reset when
+        op25 restarts; set <code class="mono">verbosity</code> in cfg.json to
+        make the level the default at startup.
+      </div>
     </div>
     <div class="panel">
       <h3>Logs</h3>
@@ -477,7 +523,8 @@ const CONFIG_GUIDE = {
       { path: "trunking.chans[].modulation", set: "cqpsk or fm", note: "cqpsk for 700/800 MHz, fm for VHF/UHF." },
       { path: "trunking.chans[].whitelist / blacklist", set: "1,2,3", note: "Comma-separated talkgroup IDs to restrict or block decoding." },
       { path: "trunking.chans[].wacn / sysid", set: "\"\"", note: "Optional; learned from the control channel if left empty." },
-      { path: "trunking.chans[].center_frequency", set: "856000000", note: "Same control channel frequency in HERTZ." }
+      { path: "trunking.chans[].center_frequency", set: "856000000", note: "Same control channel frequency in HERTZ." },
+      { path: "verbosity", set: "2", note: "op25 log verbosity 0..10 (0 quiet, 2 verbose, 5 debug, 9 tuning, 10 full). Change live from Status &rarr; op25 diagnostics." }
     ],
     examples: [
       { title: "700/800 MHz trunked system (Phase 1+2)", code: `{
@@ -977,6 +1024,42 @@ function renderSdr(r) {
   });
 }
 
+$("diagBtn").onclick = async () => {
+  const idx = parseInt($("diagIndex").value, 10);
+  if (!Number.isInteger(idx) || idx < 0) { $("diagResult").innerHTML = '<div class="msg err">Enter a valid device index</div>'; return; }
+  const btn = $("diagBtn");
+  btn.disabled = true; btn.textContent = "Running rtl_test (a few seconds)...";
+  $("diagResult").innerHTML = '<div class="center">Running diagnostic&hellip;</div>';
+  try {
+    const r = await api("/api/sdr/diag/" + idx, {method:"POST"});
+    renderDiag(r);
+  } catch(e) { $("diagResult").innerHTML = '<div class="msg err">'+esc(e.message)+'</div>'; }
+  btn.disabled = false; btn.textContent = "Run rtl_test diagnostic";
+};
+function renderDiag(d) {
+  const el = $("diagResult"); el.innerHTML = "";
+  const cls = d.status === "OK" ? "live" : "enc";
+  el.innerHTML += `<div class="card" style="margin-bottom:8px">
+    <div class="row"><span class="k">Device</span><span>index ${d.index} <span class="badge ${cls}">${esc(d.status)}</span></span></div>
+    <div class="row"><span class="k">Opened</span><span>${d.opened?"yes":"no"}</span></div>
+    <div class="row"><span class="k">Reading samples</span><span>${d.reading_samples?"yes":"no"}</span></div>`;
+  if (d.max_signal) {
+    el.innerHTML += `<div class="row"><span class="k">Noise floor</span><span class="mono">max ${d.max_signal} / min ${d.min_signal}${d.avg_signal? " / avg "+d.avg_signal : ""}</span></div>`;
+  }
+  (d.issues||[]).forEach(i => {
+    el.innerHTML += `<div class="msg err" style="margin:4px 0">&#9888; ${esc(i)}</div>`;
+  });
+  if (d.error) el.innerHTML += `<div class="msg err" style="margin:4px 0">${esc(d.error)}</div>`;
+  if (d.status === "OK") {
+    el.innerHTML += `<div class="msg ok" style="margin:4px 0">Dongle opened and is producing samples. If op25 still won't decode, tune the control channel / check the op25 log.</div>`;
+  }
+  if (d.lines && d.lines.length) {
+    el.innerHTML += `<details style="margin-top:6px"><summary>raw rtl_test output (${d.lines.length} lines)</summary>
+      <pre class="mono" style="background:#0a0d12;border:1px solid var(--border);border-radius:8px;padding:10px;max-height:300px;overflow:auto;white-space:pre-wrap;font-size:11px">${esc(d.lines.join("\n"))}</pre></details>`;
+  }
+  el.innerHTML += "</div>";
+}
+
 // ---------------- status ----------------
 async function loadStatus() {
   try {
@@ -993,6 +1076,34 @@ async function loadStatus() {
     });
   } catch(e) {}
 }
+
+// ---------------- op25 diagnostics ----------------
+async function loadOp25Debug() {
+  try {
+    const d = await api("/api/op25/debug");
+    $("dbgLevel").value = String(d.configured);
+    $("dbgHint").textContent = "cfg.json default: " + d.configured + " (applies on container start). Live overrides last until op25 is restarted.";
+  } catch(e) { $("dbgHint").textContent = ""; }
+}
+$("dbgSet").onclick = async () => {
+  const lvl = $("dbgLevel").value;
+  try {
+    const r = await api("/api/op25/debug/" + lvl, {method:"POST"});
+    $("dbgHint").textContent = r.ok
+      ? "Log level set to " + r.level + " - open the op25 log below to see the extra output."
+      : "No reply from the op25 terminal (is op25 running?).";
+  } catch(e) { $("dbgHint").textContent = "Error: " + e.message; }
+  if (logOn) setTimeout(loadLog, 300);
+};
+$("dbgDump").onclick = async () => {
+  try {
+    const r = await api("/api/op25/dump-tgids", {method:"POST"});
+    $("dbgHint").textContent = r.ok
+      ? "Dump sent - decoded talkgroup list (with activity counters) is now in the op25 log. Empty list = no control channel decode yet."
+      : "No reply from the op25 terminal (is op25 running?).";
+  } catch(e) { $("dbgHint").textContent = "Error: " + e.message; }
+  if (logOn) setTimeout(loadLog, 300);
+};
 
 let logTimer = null, logOn = false;
 function startLogAuto() {
@@ -1020,6 +1131,7 @@ $("logAuto").onclick = () => { logOn = !logOn; $("logAuto").textContent = logOn 
   } catch(e) {}
   await loadConfig();
   loadStatus();
+  loadOp25Debug();
 })();
 </script>
 </body>

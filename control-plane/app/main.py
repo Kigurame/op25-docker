@@ -9,7 +9,7 @@ import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
-from . import auth, config_store, sdr, supervisor_ctl
+from . import auth, config_store, op25_ctl, sdr, supervisor_ctl
 from .telemetry import telemetry as TELEM
 
 app = FastAPI(title="op25-docker control plane", docs_url=None, redoc_url=None)
@@ -267,6 +267,74 @@ async def api_sdr_result(request: Request):
     except PermissionError:
         return JSONResponse({"error": "not authenticated"}, status_code=401)
     return sdr.sdr_scanner.result()
+
+
+@app.post("/api/sdr/diag/{index}")
+async def api_sdr_diag(index: str, request: Request):
+    """Deep-diagnose one dongle: run rtl_test and check for tuner/USB failures."""
+    try:
+        require_user(request, role="admin")
+    except PermissionError as e:
+        return JSONResponse({"error": str(e)}, status_code=401 if "authenticated" in str(e) else 403)
+    try:
+        dev = int(index)
+    except ValueError:
+        return JSONResponse({"error": "device index must be an integer"}, status_code=400)
+    if dev < 0 or dev >= sdr.MAX_DEVICES:
+        return JSONResponse({"error": "device index out of range"}, status_code=400)
+    return sdr.diagnose(dev)
+
+
+# ---------------------------------------------------------------- op25 control
+
+@app.get("/api/op25/debug")
+async def api_op25_debug(request: Request):
+    """Current op25 verbosity (from cfg.json) and the available levels."""
+    try:
+        require_user(request)
+    except PermissionError:
+        return JSONResponse({"error": "not authenticated"}, status_code=401)
+    try:
+        cfg = config_store.read_json("cfg.json")
+    except (OSError, ValueError):
+        cfg = {}
+    return {"configured": cfg.get("verbosity", 1), "levels": op25_ctl.LEVELS}
+
+
+@app.post("/api/op25/debug/{level}")
+async def api_op25_debug_set(level: str, request: Request):
+    """Change op25's live log verbosity without restarting (set_debug)."""
+    try:
+        require_user(request, role="admin")
+    except PermissionError as e:
+        return JSONResponse({"error": str(e)}, status_code=401 if "authenticated" in str(e) else 403)
+    try:
+        lvl = int(level)
+    except ValueError:
+        return JSONResponse({"error": "level must be an integer 0..10"}, status_code=400)
+    if lvl < 0 or lvl > 10:
+        return JSONResponse({"error": "level must be an integer 0..10"}, status_code=400)
+    port = _op25_terminal_port()
+    return op25_ctl.set_debug(lvl, port=port)
+
+
+@app.post("/api/op25/dump-tgids")
+async def api_op25_dump_tgids(request: Request):
+    """Ask op25 to print all decoded talkgroups (with counters) to its log."""
+    try:
+        require_user(request, role="admin")
+    except PermissionError as e:
+        return JSONResponse({"error": str(e)}, status_code=401 if "authenticated" in str(e) else 403)
+    port = _op25_terminal_port()
+    return op25_ctl.dump_tgids(port=port)
+
+
+def _op25_terminal_port():
+    try:
+        cfg = config_store.read_json("cfg.json")
+    except (OSError, ValueError):
+        cfg = {}
+    return op25_ctl.terminal_port_from_config(cfg)
 
 
 # -------------------------------------------------------------- stream proxy

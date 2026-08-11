@@ -96,14 +96,17 @@ def render_icecast(stream_json, listen_json, out_dir, tpl_dir):
     os.chmod(htpasswd_file, 0o600)
 
 
-def render_supervisor(stream_json, out_path, tpl_dir):
+def render_supervisor(stream_json, out_path, tpl_dir, cfg_json):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     tpl_path = _find_template([os.path.join(tpl_dir, "supervisor", "supervisord.conf.tpl"),
                                os.path.join(script_dir, "supervisor", "supervisord.conf.tpl")])
     with open(tpl_path, "r", encoding="utf-8") as fh:
         tpl = fh.read()
     ic = stream_json.get("icecast", {})
+    verbosity = int(cfg_json.get("verbosity", 1)) if isinstance(cfg_json.get("verbosity"), int) else 1
+    verbosity = max(0, min(verbosity, 10))
     out = tpl.replace("@SUPERVISOR_PASSWORD@", ic.get("supervisor_password", "changeme"))
+    out = out.replace("@OP25_VERBOSITY@", str(verbosity))
     with open(out_path, "w", encoding="utf-8") as fh:
         fh.write(out)
 
@@ -127,9 +130,10 @@ def main():
 
     stream_json = load("stream.json")
     listen_json = load("listen.json")
+    cfg_json = load("cfg.json")
 
     render_icecast(stream_json, listen_json, out_dir, args.tpl_dir)
-    render_supervisor(stream_json, args.supervisor_conf, args.tpl_dir)
+    render_supervisor(stream_json, args.supervisor_conf, args.tpl_dir, cfg_json)
 
     print("rendered icecast.xml, htpasswd, supervisord.conf from %s" % conf_dir)
     return 0

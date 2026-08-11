@@ -13,7 +13,7 @@ you.
 
 | file | purpose |
 |------|---------|
-| `cfg.json` | op25 receiver: SDR device, channel, P25 trunking system (control channel, NAC, modulation) |
+| `cfg.json` | op25 receiver: SDR device, channel, P25 trunking system (control channel, NAC, modulation), log `verbosity` |
 | `stream.json` | Icecast: ports, passwords, listener auth, and one stream entry per audio mount |
 | `listen.json` | Icecast listener accounts (used when `listener_auth` is true) |
 | `users.json` | Web control-plane accounts |

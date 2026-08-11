@@ -1,9 +1,32 @@
-"""SDR device scanning using rtl_test."""
+"""SDR device scanning and diagnostics using rtl_test."""
 import re
+import signal
 import subprocess
 import threading
 
 MAX_DEVICES = 4
+
+# Substrings that indicate the dongle opened but the R820T/R820T2 tuner
+# failed to lock or tune (seen in op25 logs as "[R82XX] PLL not locked!" /
+# "r82xx_set_freq: failed=-1"). When present the dongle cannot receive,
+# regardless of what frequency cfg.json asks for.
+TUNER_FAIL_PATTERNS = [
+    r"PLL not locked",
+    r"r82xx_set_freq: failed",
+    r"r82xx_write: i2c wr failed",
+    r"set_tuner_bandwidth failed",
+    r"Unable to set tuned frequency",
+]
+
+# Substrings that indicate the device could not be opened/claimed at all.
+OPEN_FAIL_PATTERNS = [
+    "Failed to open rtlsdr device",
+    "No supported devices found",
+    "No matching devices found",
+    "usb_claim_interface error",
+    "usb_open error",
+    "Supplied device index is out of range",
+]
 
 
 def _rtl_test(dev_index):
@@ -69,6 +92,90 @@ def scan():
         result["ok"] = False
         result["error"] = "No RTL-SDR devices detected"
     return result
+
+
+def _run_rtl_test(dev_index, extra_args, timeout):
+    cmd = ["rtl_test", "-d", str(dev_index)] + extra_args
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, errors="replace")
+    except OSError as e:
+        return "", "rtl_test not available: %s" % e
+    try:
+        try:
+            out, errs = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            # Graceful stop so rtl_test prints its signal-strength summary
+            proc.send_signal(signal.SIGINT)
+            try:
+                out, errs = proc.communicate(timeout=3)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                out, errs = proc.communicate()
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+    return (out or "") + (errs or ""), None
+
+
+def diagnose(dev_index):
+    """Run a deeper diagnostic on one dongle and report whether it can
+    actually receive. Checks (1) USB open/claim, (2) tuner lock, and
+    (3) that a real sample stream is produced with a sane noise floor."""
+    index = max(0, int(dev_index))
+    out, err = _run_rtl_test(index, [], 8)
+    if err:
+        return {"index": index, "ok": False, "error": err, "lines": []}
+    lines = [l.strip() for l in out.splitlines() if l.strip()]
+    issues = []
+    for pat in TUNER_FAIL_PATTERNS:
+        if re.search(pat, out, re.IGNORECASE):
+            issues.append("tuner failed to lock/tune: '%s' present in rtl_test output" % pat)
+    for pat in OPEN_FAIL_PATTERNS:
+        if re.search(pat, out, re.IGNORECASE):
+            issues.append("device could not be opened: '%s'" % pat)
+
+    opened = re.search(r"Using device\s+(\d+):", out)
+    reads = re.search(r"Reading samples in async mode", out)
+    found = re.search(r"Found\s+(\d+)\s+device", out)
+
+    ok = not issues
+    status = "OK" if ok else "FAILED"
+    if not ok:
+        pass
+    elif opened and opened.group(1) != str(index):
+        ok = False
+        status = "FAILED"
+        issues.append("index %d resolved to a different device (%s)" % (index, opened.group(1)))
+    elif not reads:
+        ok = False
+        status = "WARN"
+        issues.append("device opened but never entered continuous sample reading")
+    elif found and found.group(1) != "1":
+        ok = False
+        status = "WARN"
+        issues.append("unexpected device count in output")
+
+    # signal stats printed by rtl_test on shutdown
+    maxsig = re.search(r"Max signal strength:\s*([-+0-9.]+)\s+dB", out, re.IGNORECASE)
+    minsig = re.search(r"Min signal strength:\s*([-+0-9.]+)\s+dB", out, re.IGNORECASE)
+    avgsig = re.search(r"(?:Avg|Average) signal strength:\s*([-+0-9.]+)\s+dB", out, re.IGNORECASE)
+
+    detail = {
+        "index": index,
+        "ok": ok,
+        "status": status,
+        "issues": issues,
+        "opened": bool(opened),
+        "reading_samples": bool(reads),
+        "max_signal": maxsig.group(1) + " dB" if maxsig else "",
+        "min_signal": minsig.group(1) + " dB" if minsig else "",
+        "avg_signal": avgsig.group(1) + " dB" if avgsig else "",
+        "lines": lines,
+    }
+    if err:
+        detail["note"] = err
+    return detail
 
 
 class SdrScanner:
