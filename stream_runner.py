@@ -79,13 +79,29 @@ class TelemetryPoller(threading.Thread):
 class IcecastMetaUpdater:
     """Sends now-playing metadata to Icecast using the legacy admin API."""
     def __init__(self, host, port, admin_password):
-        self.base = "http://%s:%s/admin/metadata" % (host, port)
+        self.admin = "http://%s:%s/admin" % (host, port)
+        self.base = self.admin + "/metadata"
         creds = base64.b64encode(("admin:%s" % admin_password).encode("utf-8")).decode("ascii")
         self.headers = {"Authorization": "Basic " + creds}
         self._last = {}
+        self._fails = {}
+
+    def wait_ready(self, mounts, timeout=30.0):
+        """Wait until Icecast lists every mount as live (source connected)."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                req = urllib.request.Request(self.admin + "/listmounts", headers=self.headers)
+                with urllib.request.urlopen(req, timeout=2.0) as r:
+                    body = r.read().decode("utf-8", "replace")
+                if all(m in body for m in mounts):
+                    return
+            except (URLError, HTTPError, OSError, ValueError):
+                pass
+            time.sleep(1.0)
+        log("warning: mounts not live on icecast after %ds: %s" % (int(timeout), ", ".join(mounts)))
 
     def update(self, mount, title):
-        key = (mount, title)
         if self._last.get(mount) == title:
             return
         # song is a query-string value: encode everything (safe="") so spaces,
@@ -97,7 +113,17 @@ class IcecastMetaUpdater:
             with urllib.request.urlopen(req, timeout=1.0):
                 pass
             self._last[mount] = title
-        except (URLError, HTTPError, OSError, ValueError) as e:
+            self._fails[mount] = 0
+        except HTTPError as e:
+            if e.code == 400:
+                # Mount not live yet (source still connecting at boot): retry
+                # silently on the next loop; only complain if it stays down.
+                self._fails[mount] = self._fails.get(mount, 0) + 1
+                if self._fails[mount] > 20:
+                    log("metadata update failed for %s: %s (mount not live)" % (mount, e))
+            else:
+                log("metadata update failed for %s: %s" % (mount, e))
+        except (URLError, OSError, ValueError) as e:
             log("metadata update failed for %s: %s" % (mount, e))
 
     def forget(self, mount):
@@ -411,6 +437,10 @@ class StreamManager:
                 threading.Thread(target=s.run, daemon=True, name="pump-%s" % s.name).start()
         if any(s.enabled for s in self.streams):
             TelemetryPoller(self.term_port, self.on_telemetry).start()
+            # Wait for the ffmpeg sources to connect to Icecast before pushing
+            # metadata; an early push hits a mount that doesn't exist yet and
+            # Icecast answers 400. wait_ready logs a warning if they never come up.
+            self.meta.wait_ready([s.mount for s in self.streams if s.enabled])
             # The op25 UDP terminal answers only the single most recent client,
             # and we share it with the web control plane's poller, so telemetry
             # reaches us intermittently. Push metadata on our own timer instead
