@@ -43,9 +43,10 @@ monitoring, call history, and configuration.
 ├── Dockerfile                  # multi-stage: builds op25 (gr310) then a slim runtime
 ├── docker-compose.yml          # ports, volumes, USB passthrough, healthcheck (builds locally)
 ├── examples/docker-compose.yml # run the published Docker Hub image
+├── docs/SETUP.md               # step-by-step guide to receiving your first P25 system
 ├── render_configs.py           # renders icecast.xml / htpasswd / supervisord.conf from conf/
 ├── stream_runner.py            # UDP audio → ffmpeg → icecast pump + metadata updater
-├── conf/                       # your editable configuration (volume-mounted)
+├── conf/                       # your editable configuration (volume-mounted; README.md describes each file)
 │   ├── cfg.json                #   op25: devices, channels, trunking (P25 system)
 │   ├── stream.json             #   icecast: ports, passwords, per-stream mounts
 │   ├── users.json              #   control-plane accounts
@@ -106,6 +107,11 @@ password: admin123
 **Change this password immediately** (Control plane → Change my password) and
 update the other defaults in `conf/stream.json` / `conf/listen.json` (see
 Security below).
+
+For a step-by-step walkthrough to start receiving your first P25 system
+(SDR setup, control channel, NAC, listening), see
+**[docs/SETUP.md](docs/SETUP.md)**. The config files under `conf/` are
+templates — each contains a `_template_notes` key explaining what to fill in.
 
 ## Streaming
 

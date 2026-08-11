@@ -1,4 +1,9 @@
 {
+    "_template_notes": {
+        "about": "Template for op25-docker. Change the passwords and match udp_port to cfg.json, then save (restarts icecast + streams). Full walkthrough: docs/SETUP.md.",
+        "icecast": "Change source_password / admin_password / supervisor_password from the defaults. listener_auth true means listeners must use an account from listen.json.",
+        "streams": "One entry per Icecast mount. 'udp_port' must match the channel 'destination' port in cfg.json. 'mount' is the listening URL path (e.g. /primary.mp3), 'codec' is mp3 or aac, 'bitrate_kbps' sets encoder quality."
+    },
     "icecast": {
         "host": "127.0.0.1",
         "port": 8000,

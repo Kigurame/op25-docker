@@ -1,4 +1,5 @@
 {
+    "_template_notes": "Icecast listener accounts, used when stream.json 'icecast.listener_auth' is true. Change the default password and add any LAN listeners you want to grant access.",
     "auth": true,
     "users": [
         {
