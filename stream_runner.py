@@ -34,7 +34,6 @@ META_INTERVAL = 3.0          # seconds between metadata refresh attempts
 AUDIO_FRAME = 160            # samples per channel per packet @8kHz
 SILENCE_INTERVAL = 0.02      # seconds between silence frames
 SAMPLE_RATE = 8000           # Hz, audio pipeline rate
-MAX_PCM_BUDGET = 1.0         # seconds of catch-up audio the pump may queue
 
 
 def log(msg):
@@ -203,12 +202,17 @@ class StreamPump:
             self._last_err = data.decode(errors="replace")[-400:]
 
     def bind_sockets(self):
+        # A large receive buffer lets the kernel absorb OP25's delivery bursts
+        # while the pump drains them at real time; the default (212 KB) can
+        # overflow and drop audio on a bursty sender.
         self.sock_a = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock_a.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock_a.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1 << 20)
         self.sock_a.setblocking(0)
         self.sock_a.bind(("0.0.0.0", self.udp_port))
         self.sock_b = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock_b.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock_b.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1 << 20)
         self.sock_b.setblocking(0)
         self.sock_b.bind(("0.0.0.0", self.udp_port + 1))
         log("stream %s: listening udp %d/%d" % (self.name, self.udp_port, self.udp_port + 1))
@@ -219,17 +223,16 @@ class StreamPump:
 
     def run(self):
         self.bind_sockets()
-        # Real-time pacing: OP25 sends UDP audio in bursts, and once the
-        # kernel receive buffer holds a backlog the select() below returns
-        # immediately, so the pump would drain frames at CPU speed and feed
-        # ffmpeg ahead of real time. That makes Icecast serve the stream
-        # faster than real time and every client hears it choppy or stalls.
-        # A token bucket caps writes to the real-time PCM rate; when input
-        # runs ahead we drop whole frames instead of letting latency grow.
-        pcm_rate = self.channels * SAMPLE_RATE * 2  # real-time bytes/sec
-        max_budget = int(pcm_rate * MAX_PCM_BUDGET)
-        budget = max_budget
-        last_tic = time.time()
+        # Real-time pacing: OP25 delivers audio in bursts, and if the pump
+        # drained the UDP sockets at CPU speed it would feed ffmpeg ahead of
+        # real time, so Icecast serves the mount faster than real time and
+        # every client hears it choppy. We write at most one frame per frame
+        # interval (0.02 s), paced by wall clock: burst frames are buffered by
+        # the kernel socket and drained one per slot (nothing dropped, no
+        # latency creep), and silence is written only when no frame is due.
+        frame_dur = AUDIO_FRAME / float(SAMPLE_RATE)
+        next_tic = time.time()
+        poll = min(0.001, frame_dur / 10.0)
         while self.keep_running:
             if self.proc is None or self.proc.poll() is not None:
                 if self.proc is not None and self.proc.poll() is not None:
@@ -243,14 +246,10 @@ class StreamPump:
                     time.sleep(2.0)
 
             try:
-                readable, _, _ = select.select([self.sock_a, self.sock_b], [], [], SILENCE_INTERVAL)
+                readable, _, _ = select.select([self.sock_a, self.sock_b], [], [], poll)
             except (OSError, ValueError):
                 time.sleep(0.1)
                 continue
-
-            now = time.time()
-            budget = min(max_budget, budget + (now - last_tic) * pcm_rate)
-            last_tic = now
 
             buf_a = buf_b = None
             flag_a = flag_b = None
@@ -285,10 +284,17 @@ class StreamPump:
             else:
                 frame = self.interleave(buf_a, buf_b)
 
-            if budget >= len(frame):
-                self._write(frame)
-                budget -= len(frame)
-            # else input outran real time: drop the frame to stay in sync
+            # Pace to the real-time slot before writing this frame.
+            now = time.time()
+            if next_tic > now:
+                time.sleep(next_tic - now)
+            next_tic += frame_dur
+            if next_tic < now:
+                # Fell behind: don't flush the backlog at CPU speed. The
+                # kernel socket buffer holds the excess and drains at real
+                # time, one frame per slot.
+                next_tic = now + frame_dur
+            self._write(frame)
 
         self._close()
 
