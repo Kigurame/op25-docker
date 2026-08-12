@@ -144,13 +144,13 @@ async def api_config(request: Request):
         return JSONResponse({"error": "cannot read config: %s" % e}, status_code=500)
 
 
-@app.put("/api/config/{name}")
+@app.put("/api/config/{name:path}")
 async def api_config_put(name: str, request: Request):
     try:
         require_user(request, role="admin")
     except PermissionError as e:
         return JSONResponse({"error": str(e)}, status_code=401 if "authenticated" in str(e) else 403)
-    allowed = [os.path.basename(n) for n in config_store.CONF_FILES]
+    allowed = list(config_store.CONF_FILES)
     if name not in allowed:
         return JSONResponse({"error": "unknown config file"}, status_code=404)
     body = await request.json()
@@ -177,8 +177,9 @@ async def api_config_put(name: str, request: Request):
 
     applied = []
     if name == "cfg.json":
+        _rerender()
         supervisor_ctl.restart("op25")
-        applied.append("op25 restarted")
+        applied.append("op25 restarted (config re-rendered)")
     elif name in ("stream.json", "listen.json"):
         _rerender()
         supervisor_ctl.restart("icecast")
