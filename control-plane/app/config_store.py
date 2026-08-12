@@ -69,11 +69,15 @@ def validate_cfg(cfg):
         if ch["trunking_sysname"] not in sysnames:
             raise ConfigError("channel '%s' trunking_sysname '%s' does not match any trunking.chans[].sysname (%s)"
                               % (ch.get("name", "?"), ch["trunking_sysname"], ", ".join(sorted(sysnames))))
+        if "crypt_keys" in ch:
+            _require_str(ch["crypt_keys"], "channels[].crypt_keys", allow_empty=True)
+        _check_crypt_behavior(ch.get("crypt_behavior"), "channels[].crypt_behavior")
     for sys in cfg["trunking"]["chans"]:
         if "sysname" not in sys:
             raise ConfigError("each trunked system needs a 'sysname'")
         if not sys.get("control_channel_list"):
             raise ConfigError("system '%s' needs a non-empty control_channel_list" % sys.get("sysname"))
+        _check_crypt_behavior(sys.get("crypt_behavior"), "trunking.chans[].crypt_behavior")
     return True
 
 
@@ -84,6 +88,17 @@ def _require_int(value, name, minimum=1, maximum=None):
         raise ConfigError("%s must be at least %d" % (name, minimum))
     if maximum is not None and value > maximum:
         raise ConfigError("%s must be at most %d" % (name, maximum))
+    return True
+
+
+def _check_crypt_behavior(value, name):
+    """op25 crypt_behavior: 0=allow, 1=silence, 2=skip, -1=encrypted only."""
+    if value is None:
+        return True
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ConfigError("%s must be an integer" % name)
+    if value not in (-1, 0, 1, 2):
+        raise ConfigError("%s must be one of -1, 0, 1, 2" % name)
     return True
 
 

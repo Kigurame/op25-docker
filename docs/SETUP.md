@@ -75,9 +75,28 @@ Follow the `_template_notes` embedded in the file. The values you must get right
 | `trunking.chans[0].phase2_tdma` | `1` if the system uses Phase 2 TDMA, `0` for Phase 1 only |
 | `trunking.chans[0].modulation` | `cqpsk` (700/800 MHz) or `fm` (VHF/UHF) |
 | `trunking.chans[0].whitelist` / `.blacklist` | comma-separated talkgroup IDs to restrict/block decoding |
+| `channels[0].crypt_keys` | **empty by default** — encrypted talkgroups are ignored. Set to a keys file path (see step 4b) to decrypt them |
 
 Everything else (demod/filter/symbol-rate defaults) can stay as shipped unless
 you know it needs changing.
+
+### 4b. Encrypted talkgroups (optional)
+
+By default the container **ignores encrypted traffic** — encrypted talkgroups
+are never tuned, so they cost no CPU and produce no audio. To listen to
+encrypted calls you must supply an op25 keys file:
+
+1. Create `conf/keys.json` in the op25 [keys format](https://github.com/boatbod/op25/blob/gr310/op25/gr-op25_repeater/apps/example_keys.json):
+   ```json
+   { "0x1b50": { "algid": "0xaa", "key": ["0x12", "0x34", "0x56", "0x78", "0x90"] } }
+   ```
+   `algid` is `0xaa` (ADP), `0x81` (DES-OFB) or `0x84` (AES-OFB); the `key` is
+   the binary key as byte array.
+2. In `cfg.json` set `channels[0].crypt_keys` to `/opt/op25/conf/keys.json`
+   (the file must exist inside the container).
+3. Save. `crypt_behavior` is derived automatically — `2` (skip) while no keys
+   file is present, `0` (allow/decrypt) once a keys file exists — so encrypted
+   traffic is decrypted only when you have the matching keys.
 
 ## 5. Configure `stream.json`
 
@@ -126,7 +145,7 @@ affected services automatically. Then:
 | No tuning / decode and not sure why | **Status → op25 diagnostics**: set log level 9 and watch the op25 log for `Tuning to frequency`, `attempt to assign control channel receiver`; click *Dump decoded talkgroups to log* (empty = no decode). A steady `conv process_qmsg: type(-1)` at level 5 means the channel is stuck in conventional mode — add `trunking_sysname` to `channels[0]` matching `trunking.chans[0].sysname`. **SDR → Dongle diagnostics**: `PLL not locked!` / `r82xx_set_freq: failed` means the tuner can't lock (USB power/hardware). |
 | Stream connects but silent | channel `destination` port does not match `streams[].udp_port`; or stream `enabled: false`; or listener auth blocks you (use `listen.json` creds). |
 | Audio garbled / drift over time | tune `devices[0].ppm` (crystal error). Start near the correct value and adjust a few ppm at a time until the constellation/decode is clean. |
-| Nothing but encrypted talkgroups | system uses full-time encryption; op25 cannot decode it (`crypt_behavior`/`crypt_keys` only cover systems you have keys for). |
+| Nothing but encrypted talkgroups | system uses full-time encryption. The container ignores encrypted calls by default; to try to decode them add the keys file and set `channels[0].crypt_keys` (step 4b). Without the matching keys op25 cannot decode it. |
 | Frequency in logs looks off | remember: `frequency`/`center_frequency` are **Hz**, `control_channel_list` is **MHz**. |
 | Save doesn't seem to apply | config validation failed — the web UI shows the error; check the JSON is valid before saving. |
 

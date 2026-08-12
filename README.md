@@ -26,6 +26,10 @@ monitoring, call history, and configuration.
 - **Streaming** – every channel defined in `cfg.json` gets its own Icecast mount.
   MP3 or AAC output at a configurable bitrate, silence-filled between calls so
   listeners stay connected.
+- **Encryption-safe by default** – encrypted talkgroups are ignored out of the
+  box (no CPU spent, no noise); add an op25 keys file and point
+  `channels[].crypt_keys` at it to decrypt calls you have keys for.
+  `crypt_behavior` switches automatically (skip → allow).
 - **Icecast with listener auth** – per-mount htpasswd authentication (independent
   of the web login) for sharing the feed over the LAN.
 - **Config editing** – edit `cfg.json`, `stream.json`, `users.json`, `listen.json`

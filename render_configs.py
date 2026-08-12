@@ -21,6 +21,48 @@ def md5_hash(password):
     return hashlib.md5(password.encode("utf-8")).hexdigest()
 
 
+CRYPT_ALLOW = 0   # op25: attempt decode of encrypted traffic (keys loaded)
+CRYPT_SKIP = 2    # op25: ignore encrypted talkgroups entirely (no key)
+
+
+def _resolve_keyfile(keyfile, conf_dir):
+    if not keyfile:
+        return ""
+    if os.path.isabs(keyfile):
+        return keyfile
+    return os.path.join(conf_dir, keyfile)
+
+
+def normalize_crypt(cfg_json, conf_dir):
+    """Encrypted traffic is ignored unless the user provides a keys file.
+
+    op25's `crypt_behavior` values: 0 = allow (decode when a key is loaded),
+    2 = skip (never tune encrypted talkgroups). We derive it from the presence
+    of an op25 keys file so the out-of-the-box default ignores encryption:
+
+      - channels[i].crypt_keys is a path to a keys file
+        (keyid -> {algid, key[]}, see example_keys.json). Empty/missing file =>
+        crypt_behavior 2. Existing file => crypt_behavior 0 and the key path is
+        made absolute so multi_rx can open it from its working directory.
+      - trunking.chans[].crypt_behavior mirrors the channel behaviour so the
+        trunking module skips encrypted grants instead of tuning them.
+    """
+    for ch in cfg_json.get("channels", []):
+        keyfile = _resolve_keyfile(ch.get("crypt_keys", ""), conf_dir)
+        has_keys = bool(keyfile) and os.path.isfile(keyfile)
+        ch["crypt_keys"] = keyfile if has_keys else ""
+        ch["crypt_behavior"] = CRYPT_ALLOW if has_keys else CRYPT_SKIP
+    key_by_sys = {}
+    for ch in cfg_json.get("channels", []):
+        if ch.get("trunking_sysname") and ch.get("crypt_keys"):
+            key_by_sys[ch["trunking_sysname"]] = ch["crypt_keys"]
+    fallback_keys = next((ch.get("crypt_keys") for ch in cfg_json.get("channels", []) if ch.get("crypt_keys")), "")
+    for sys in cfg_json.get("trunking", {}).get("chans", []):
+        keys = key_by_sys.get(sys.get("sysname"), fallback_keys)
+        sys["crypt_behavior"] = CRYPT_ALLOW if keys else CRYPT_SKIP
+    return cfg_json
+
+
 def render_mounts(streams, listener_auth, htpasswd_file, max_listeners):
     blocks = []
     for s in streams:
@@ -132,10 +174,20 @@ def main():
     listen_json = load("listen.json")
     cfg_json = load("cfg.json")
 
+    normalize_crypt(cfg_json, conf_dir)
+    with open(os.path.join(out_dir, "cfg.json"), "w", encoding="utf-8") as fh:
+        json.dump(cfg_json, fh, indent=4, ensure_ascii=False)
+        fh.write("\n")
+
     render_icecast(stream_json, listen_json, out_dir, args.tpl_dir)
     render_supervisor(stream_json, args.supervisor_conf, args.tpl_dir, cfg_json)
 
-    print("rendered icecast.xml, htpasswd, supervisord.conf from %s" % conf_dir)
+    keyed = [ch.get("crypt_keys") for ch in cfg_json.get("channels", []) if ch.get("crypt_keys")]
+    if keyed:
+        print("crypt: keys file(s) found -> encrypted traffic will be decrypted (%s)" % ", ".join(keyed))
+    else:
+        print("crypt: no keys file -> encrypted talkgroups are ignored")
+    print("rendered /etc/op25/cfg.json, icecast.xml, htpasswd, supervisord.conf from %s" % conf_dir)
     return 0
 
 

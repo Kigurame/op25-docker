@@ -565,6 +565,7 @@ const CONFIG_GUIDE = {
       "Set channels[0].destination to udp://127.0.0.1:<port> — the port must match an enabled stream's udp_port in stream.json (default 23456).",
       "In trunking.chans[0] set: sysname (any label), control_channel_list (control channel in MHz — comma-separate alternates for control-channel hunting), nac (hex, e.g. \"0x4a2\"), phase2_tdma (1 if the system uses Phase 2 TDMA), modulation (cqpsk for 700/800 MHz, fm for VHF/UHF).",
       "Optionally set devices[0].ppm (crystal drift correction) and trunking.chans[0].whitelist / blacklist (comma-separated talkgroup IDs).",
+      "Encrypted talkgroups are ignored by default. To decrypt them, drop an op25 keys file into conf/ (keyid -> {algid, key[]}) and set channels[0].crypt_keys to its path, e.g. \"/opt/op25/conf/keys.json\". crypt_behavior is auto-managed: skip (2) without a keys file, allow (0) when keys are present.",
       "Save — op25 restarts automatically; check the op25 log for a successful decode."
     ],
     fields: [
@@ -577,6 +578,8 @@ const CONFIG_GUIDE = {
       { path: "channels[].destination", set: "udp://127.0.0.1:23456", note: "Must match a stream udp_port in stream.json." },
       { path: "channels[].trunking_sysname", set: "My P25 System", note: "Must equal the trunking.chans[].sysname — links the channel to the trunking system so op25 hunts the control channel. Missing this = conventional mode, no CC decode." },
       { path: "channels[].demod_type / filter_type / symbol_rate", set: "cqpsk / p25 / 4800", note: "P25 defaults; leave unless you know otherwise." },
+      { path: "channels[].crypt_keys", set: "\"/opt/op25/conf/keys.json\"", note: "Path to an op25 keys file (keyid -> {algid, key[]}) to decrypt encrypted talkgroups. Empty = encrypted traffic is ignored. Auto-manages crypt_behavior (0=allow when set, 2=skip when empty)." },
+      { path: "channels[].crypt_behavior / trunking.chans[].crypt_behavior", set: "auto", note: "Derived automatically from crypt_keys: 0 = allow/decrypt when a keys file exists, 2 = skip encrypted talkgroups otherwise. Values -1/1 are accepted but rarely needed." },
       { path: "trunking.chans[].sysname", set: "My P25 System", note: "Any label for this system." },
       { path: "trunking.chans[].control_channel_list", set: "856.0000", note: "Control channel in MEGAHERTZ; comma-separate alternates to allow CC hunting." },
       { path: "trunking.chans[].nac", set: "0x4a2", note: "System Network Access Code in hex." },

@@ -23,7 +23,7 @@ serverurl=unix:///var/run/op25/supervisor.sock
 supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
 
 [program:op25]
-command=/usr/bin/python3 /opt/op25/apps/multi_rx.py -v @OP25_VERBOSITY@ -c /opt/op25/conf/cfg.json
+command=/usr/bin/python3 /opt/op25/apps/multi_rx.py -v @OP25_VERBOSITY@ -c /etc/op25/cfg.json
 directory=/opt/op25/apps
 priority=100
 autorestart=true
