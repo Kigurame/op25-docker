@@ -21,6 +21,8 @@ monitoring, call history, and configuration.
 
 - **Live scanner web UI** – P25 Phase 1/2 trunking status, active talkgroups, unit
   (radio) tags, recent call log with frequency/time, and now-playing metadata.
+  Each stream card offers a **Listen** link and a **Copy URL** button so the
+  feed plays in any external player (VLC, mpv, …).
 - **Streaming** – every channel defined in `cfg.json` gets its own Icecast mount.
   MP3 or AAC output at a configurable bitrate, silence-filled between calls so
   listeners stay connected.
@@ -42,8 +44,11 @@ monitoring, call history, and configuration.
   reports whether it can actually open, tune and produce samples, flagging
   tuner-lock/USB failures (`PLL not locked!`, `r82xx_set_freq: failed`) that
   otherwise only show up buried in the op25 log.
-- **Stream proxy** – authenticated `/stream/<mount>` endpoint on the web port for
-  clients that should not talk to Icecast directly.
+- **Player-friendly stream links** – the Live tab links to Icecast directly
+  (**Listen** / **Copy URL** per stream) instead of an in-page `<audio>` player,
+  so the feed plays in any player (VLC, mpv) regardless of browser codec support.
+  An authenticated `/stream/<mount>` proxy remains for programmatic clients that
+  should not talk to Icecast directly.
 - **Supervisor-managed** – all four programs (op25, streams, icecast, web) are
   auto-restarted under supervisord, with logs viewable in the web UI.
 
@@ -132,6 +137,10 @@ username: scanner
 password: listen123
 ```
 
+In the web UI's **Live** tab each stream card has a **Listen** link (opens the
+feed in a new tab) and a **Copy URL** button — see
+["Listening in a player"](#listening-in-a-player) below.
+
 `conf/stream.json` controls Icecast itself (source/admin/supervisor passwords,
 listener auth on/off, max clients) and one or more streams:
 
@@ -177,10 +186,26 @@ it the default. When trying to diagnose a system that won't decode:
    prints `PLL not locked!` / `r82xx_set_freq: failed` — a hardware/USB/power
    problem that no frequency setting will fix.
 
-### Web stream proxy
+### Listening in a player
 
-If you prefer not to expose Icecast, the control plane proxies the feed
-(using the configured Icecast listener credentials) at:
+The web UI no longer embeds an in-page `<audio>` player. The encoder emits
+8 kHz MPEG-2.5 MP3, which some browsers refuse to decode inside an `<audio>`
+element, so each stream card on the **Live** tab instead provides:
+
+- **Listen** – opens the direct Icecast URL in a new tab.
+- **Copy URL** – copies the stream URL to the clipboard for use in any
+  external player (VLC, mpv, …).
+
+The URL is built from `stream.json` (`icecast.port`, `icecast.listener_auth`)
+and the first account in `listen.json`, so when listener auth is enabled the
+credentials are embedded automatically:
+
+```
+http://scanner:listen123@<host>:8000/primary.mp3
+```
+
+If you prefer not to expose Icecast, the control plane also proxies the feed
+(using the configured listener credentials) for programmatic clients at:
 
 ```
 GET /stream/<mount>        # requires a logged-in web session
@@ -206,7 +231,7 @@ SPA served at `/`; API at `/api/*`. Notable endpoints:
 | `GET /api/op25/debug` | configured op25 verbosity + the available levels |
 | `POST /api/op25/debug/{level}` | change op25's live log verbosity (0–10) without a restart |
 | `POST /api/op25/dump-tgids` | print all decoded talkgroups (with counters) to the op25 log |
-| `GET /stream/{mount}` | authenticated Icecast proxy |
+| `GET /stream/{mount}` | authenticated Icecast proxy (programmatic clients) |
 | `GET /api/health` | healthcheck for Docker |
 
 Talkgroup / radio tagging: edit `conf/tags/tgid.tsv` and `conf/tags/rid.tsv`
@@ -284,6 +309,10 @@ ports 8080/8000 rather than publishing them directly.
 - **No audio / silence** – silence is sent between calls; tune the control
   channel and check the op25 log for a successful decode. Confirm the channel
   `destination` port matches the stream `udp_port`.
+- **In-page web player silent / won't play** – the encoder emits 8 kHz
+  MPEG-2.5 MP3, which some browsers can't decode inside an `<audio>` element.
+  The UI therefore links to the feed (**Listen** / **Copy URL**) for use in a
+  dedicated player (VLC, mpv) instead of embedding a player.
 - **ffmpeg repeatedly restarts in streams.log** – Icecast wasn't reachable at
   startup; the pump retries with backoff automatically.
 - **USB device not visible in the container** – pass

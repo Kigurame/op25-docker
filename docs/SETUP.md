@@ -106,12 +106,16 @@ affected services automatically. Then:
    `Wrong rtlsdr device index` error means the `rtl=<index>` in step 4 is wrong.
 3. **Telemetry** — after traffic starts you'll see the active channel,
    talkgroup and now-playing metadata.
-4. Listen — open one of:
+4. Listen — in the web UI's **Live** tab, each stream card has a **Listen** link
+   (opens the feed in a new tab) and a **Copy URL** button to paste into any
+   external player (VLC, mpv, …). You can also open the feed directly:
 
    ```
    http://<host>:8000/primary.mp3          # Icecast (scanner / listen123 by default)
-   http://<host>:8080/stream/primary.mp3   # web proxy (requires web login)
    ```
+
+   An authenticated `/stream/<mount>` proxy on the web port remains available
+   for programmatic clients.
 
 ## 7. Troubleshooting
 
