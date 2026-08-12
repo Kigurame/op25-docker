@@ -12,40 +12,45 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text);
-  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  font: 13.5px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 a { color: var(--accent); }
-h1 { font-size: 18px; margin: 0; }
-header { display: flex; align-items: center; gap: 16px; padding: 10px 18px;
+h1 { font-size: 15px; margin: 0; }
+header { display: flex; align-items: center; gap: 14px; padding: 7px 14px;
   background: var(--panel); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
 header .spacer { flex: 1; }
-nav button { background: none; border: 0; color: var(--muted); font-size: 14px;
-  cursor: pointer; padding: 6px 10px; border-radius: 6px; }
+nav button { background: none; border: 0; color: var(--muted); font-size: 13px;
+  cursor: pointer; padding: 5px 9px; border-radius: 6px; }
 nav button.active { color: var(--text); background: var(--panel2); }
 nav button:hover { color: var(--text); }
 button, .btn { background: var(--panel2); color: var(--text); border: 1px solid var(--border);
-  padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 12.5px; }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 button.danger { background: #3a1d1d; border-color: #6e3a3a; color: var(--red); }
 button:disabled { opacity: .5; cursor: default; }
-main { max-width: 1200px; margin: 0 auto; padding: 18px; }
-section { margin-bottom: 22px; }
-.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
-.panel h3 { margin: 0 0 10px; font-size: 14px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
-.card { background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
-.card .row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+main { max-width: 1200px; margin: 0 auto; padding: 12px 14px; }
+section { margin-bottom: 14px; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+.panel h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.card { background: var(--panel2); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; }
+.card .row { display: flex; justify-content: space-between; gap: 6px; padding: 1px 0; }
 .card .k { color: var(--muted); }
-.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px;
+.dashgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 10px; align-items: start; }
+.dashgrid .panel { margin-bottom: 0; }
+.callscroll { max-height: 280px; overflow: auto; }
+#calls { border-collapse: separate; border-spacing: 0; }
+#calls thead th { position: sticky; top: 0; background: var(--panel); z-index: 1; }
+.badge { display: inline-block; padding: 0 7px; border-radius: 10px; font-size: 10.5px;
   background: var(--panel2); border: 1px solid var(--border); }
 .badge.live { background: #10351a; border-color: var(--green); color: var(--green); }
 .badge.enc { background: #3a1d1d; border-color: var(--red); color: var(--red); }
 .badge.emo { background: #3a3010; border-color: var(--yellow); color: var(--yellow); animation: pulse 1s infinite; }
 @keyframes pulse { 50% { opacity: .5; } }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border); }
 th { color: var(--muted); font-weight: 600; }
-.mono { font-family: ui-monospace, "Cascadia Code", Menlo, monospace; font-size: 12.5px; }
-textarea { width: 100%; min-height: 340px; background: #0a0d12; color: var(--text);
+.mono { font-family: ui-monospace, "Cascadia Code", Menlo, monospace; font-size: 12px; }
+textarea { width: 100%; min-height: 300px; background: #0a0d12; color: var(--text);
   border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; resize: vertical; }
 .cfghelp { background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-top: 10px; font-size: 13px; }
 .cfghelp h4 { margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; font-size: 12px; }
@@ -56,7 +61,7 @@ textarea { width: 100%; min-height: 340px; background: #0a0d12; color: var(--tex
 .cfghelp pre { background: #0a0d12; border: 1px solid var(--border); border-radius: 6px; padding: 10px; overflow-x: auto; font-size: 12px; margin: 8px 0 0; white-space: pre; }
 input[type=text], input[type=password] { background: #0a0d12; border: 1px solid var(--border);
   border-radius: 6px; color: var(--text); padding: 7px 10px; font-size: 13px; }
-.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
 .toolbar label { color: var(--muted); font-size: 12.5px; }
 .toolbar select, .toolbar input[type=number] { background: #0a0d12; border: 1px solid var(--border);
   border-radius: 6px; color: var(--text); padding: 7px 10px; font-size: 13px; }
@@ -79,7 +84,7 @@ audio { width: 100%; height: 34px; }
 .tabbody { display: none; }
 .tabbody.active { display: block; }
 .hidden { display: none !important; }
-.center { text-align: center; color: var(--muted); padding: 20px; }
+.center { text-align: center; color: var(--muted); padding: 12px; }
 .freqnum { font-variant-numeric: tabular-nums; }
 #wizardOverlay { position: fixed; inset: 0; background: rgba(4,7,12,.75); display: none;
   align-items: center; justify-content: center; z-index: 200; }
@@ -142,26 +147,24 @@ audio { width: 100%; height: 34px; }
 <main>
   <!-- ===================== LIVE ===================== -->
   <div class="tabbody active" id="tab-dash">
-    <div class="grid">
-      <div class="panel" style="grid-column: span 2">
+    <div class="dashgrid">
+      <div class="panel">
         <h3>Systems</h3>
         <div id="systems" class="grid"></div>
+      </div>
+      <div class="panel">
+        <h3>Active Voice / Receivers</h3>
+        <div id="channels" class="grid"></div>
+      </div>
+      <div class="panel">
+        <h3>Streams</h3>
+        <div id="streams" class="grid"></div>
       </div>
     </div>
 
     <div class="panel">
-      <h3>Active Voice / Receivers</h3>
-      <div id="channels" class="grid"></div>
-    </div>
-
-    <div class="panel">
-      <h3>Streams</h3>
-      <div id="streams" class="grid"></div>
-    </div>
-
-    <div class="panel">
       <h3>Call Log</h3>
-      <div style="overflow-x:auto"><table id="calls">
+      <div class="callscroll"><table id="calls">
         <thead><tr><th>Time</th><th>System</th><th>TGID</th><th>Tag</th><th>Unit</th><th>Freq</th><th>Slot</th><th>Prio</th></tr></thead>
         <tbody></tbody>
       </table></div>
@@ -185,7 +188,7 @@ audio { width: 100%; height: 34px; }
       <textarea id="cfgEditor"></textarea>
       <div id="cfgSynopsis" class="cfghelp"></div>
       <div id="cfgExamples" class="cfghelp"></div>
-      <div class="center">Editing <span id="cfgName"></span> &mdash; save triggers the relevant service restart. If the editor ever shows <code class="mono">[object Object]</code>, hard-refresh (Ctrl+F5); the UI ships inside the container image, so rebuild with <code class="mono">docker compose up -d --build</code> after updating the repo.</div>
+      <div class="hint" style="text-align:center">Editing <span id="cfgName"></span> — saving triggers the relevant service restart. If the editor ever shows <code class="mono">[object Object]</code>, hard-refresh (Ctrl+F5); the UI ships inside the container image, so rebuild with <code class="mono">docker compose up -d --build</code> after updating the repo.</div>
     </div>
 
     <div class="panel">
@@ -214,6 +217,11 @@ audio { width: 100%; height: 34px; }
         <button id="scanBtn" class="primary">Scan for devices</button>
       </div>
       <div id="sdrResult"></div>
+      <div class="hint" style="margin-top:8px">
+        op25 uses the <code class="mono">rtl=&lt;index&gt;</code> device argument &mdash; match
+        <code class="mono">devices[0].args</code> in cfg.json to the index shown here. USB devices
+        must reach the container (<code class="mono">--device=/dev/bus/usb</code>, see docker-compose.yml).
+      </div>
     </div>
     <div class="panel">
       <h3>Dongle diagnostics</h3>
@@ -225,21 +233,10 @@ audio { width: 100%; height: 34px; }
       </div>
       <div id="diagResult"></div>
       <div class="hint" style="margin-top:6px">
-        Runs <code class="mono">rtl_test</code> on the dongle for a few seconds
-        and reports whether it can actually receive. Look for the tuner errors
-        (<span class="mono">PLL not locked!</span>,
-        <span class="mono">r82xx_set_freq: failed</span>) that also appear in
-        the op25 log when a dongle cannot tune &mdash; usually a USB power /
-        dongle hardware problem, not a configuration one.
-      </div>
-    </div>
-    <div class="panel">
-      <h3>Tip</h3>
-      <div class="center" style="text-align:left">
-        op25 uses the <code class="mono">rtl=&lt;index&gt;</code> device argument.
-        Match <code class="mono">devices[0].args</code> in cfg.json to the index shown here.
-        USB devices must be passed to the container with
-        <code class="mono">--device=/dev/bus/usb</code> (see docker-compose.yml).
+        Runs <code class="mono">rtl_test</code> for a few seconds to check the dongle can actually
+        receive. <span class="mono">PLL not locked!</span> /
+        <span class="mono">r82xx_set_freq: failed</span> mean a USB-power / dongle hardware
+        problem, not a configuration one.
       </div>
     </div>
   </div>
@@ -266,11 +263,9 @@ audio { width: 100%; height: 34px; }
       </div>
       <div class="hint" id="dbgHint"></div>
       <div class="hint" style="margin-top:6px">
-        Higher levels make op25 log every tuning step, trunking assignment and
-        channel-control message &mdash; ideal for checking whether a signal is
-        being received. Watch the <b>op25</b> log below. Live changes reset when
-        op25 restarts; set <code class="mono">verbosity</code> in cfg.json to
-        make the level the default at startup.
+        Higher levels log every tuning step and channel-control message &mdash; watch the
+        <b>op25</b> log below. Live changes reset on restart; set
+        <code class="mono">verbosity</code> in cfg.json for a startup default.
       </div>
     </div>
     <div class="panel">
@@ -285,7 +280,7 @@ audio { width: 100%; height: 34px; }
         <button id="logRefresh">Refresh</button>
         <button id="logAuto" class="primary">Auto-refresh on</button>
       </div>
-      <pre id="logView" class="mono" style="background:#0a0d12;border:1px solid var(--border);border-radius:8px;padding:10px;min-height:300px;max-height:500px;overflow:auto;white-space:pre-wrap"></pre>
+      <pre id="logView" class="mono" style="background:#0a0d12;border:1px solid var(--border);border-radius:8px;padding:10px;min-height:220px;max-height:420px;overflow:auto;white-space:pre-wrap"></pre>
     </div>
   </div>
 </main>
@@ -726,17 +721,20 @@ function renderCfgHelp(name, val) {
   const syn = $("cfgSynopsis"), ex = $("cfgExamples");
   if (!guide) { syn.innerHTML = ""; ex.innerHTML = ""; return; }
 
-  let html = `<div class="item"><b>What this file does.</b> ${esc(guide.synopsis)}</div>`;
+  let shtml = `<div class="item"><b>What this file does.</b> ${esc(guide.synopsis)}</div>`;
   const notes = (val && typeof val === "object" && !Array.isArray(val)) ? val["_template_notes"] : null;
   if (typeof notes === "string") {
-    html += `<div class="item"><span class="term">What to change:</span> ${esc(notes)}</div>`;
+    shtml += `<div class="item"><span class="term">What to change:</span> ${esc(notes)}</div>`;
   } else if (notes && typeof notes === "object") {
-    html += `<div class="item"><span class="term">What to change:</span></div>`;
+    shtml += `<div class="item"><span class="term">What to change:</span></div>`;
     Object.entries(notes).forEach(([k, v]) => {
       if (k === "about") return;
-      html += `<div class="item"><span class="term">${esc(k)}</span> — ${esc(v)}</div>`;
+      shtml += `<div class="item"><span class="term">${esc(k)}</span> — ${esc(v)}</div>`;
     });
   }
+  syn.innerHTML = shtml;
+
+  let html = `<details class="cfghelp"><summary><b>Full guide</b> — step-by-step, field reference &amp; examples</summary>`;
   if (guide.howto && guide.howto.length) {
     html += `<h4>How to configure</h4><ol>`;
     guide.howto.forEach(s => { html += `<li>${esc(s)}</li>`; });
@@ -749,13 +747,12 @@ function renderCfgHelp(name, val) {
     });
     html += `</tbody></table>`;
   }
-  syn.innerHTML = html;
-
-  let ehtml = `<h4>Examples</h4>`;
+  html += `<h4>Examples</h4>`;
   (guide.examples || []).forEach(e => {
-    ehtml += `<details><summary>${esc(e.title)}</summary><pre>${esc(e.code)}</pre></details>`;
+    html += `<details><summary>${esc(e.title)}</summary><pre>${esc(e.code)}</pre></details>`;
   });
-  ex.innerHTML = ehtml;
+  html += `</details>`;
+  ex.innerHTML = html;
 }
 
 async function loadConfig() {
