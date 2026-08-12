@@ -343,6 +343,7 @@ function showApp() {
   $("logoutBtn").classList.remove("hidden");
   $("loginErr").classList.remove("msg");
   $("loginErr").style.display = "none";
+  loadStreamsCfg();
   loadAll();
   setInterval(loadAll, 3000);
   setInterval(loadStatus, 4000);
@@ -523,6 +524,13 @@ function fallbackCopy(txt, done) {
   document.body.removeChild(ta); done();
 }
 let lastStreamsCfg = null;
+async function loadStreamsCfg() {
+  if (lastStreamsCfg) return;
+  try {
+    const s = await api("/api/config");
+    lastStreamsCfg = s.files["stream.json"];
+  } catch(e) {}
+}
 
 function renderCalls(d) {
   const tb = $("calls").querySelector("tbody"); tb.innerHTML = "";
@@ -1180,10 +1188,6 @@ $("logAuto").onclick = () => { logOn = !logOn; $("logAuto").textContent = logOn 
 // ---------------- boot ----------------
 (async () => {
   await refreshMe();
-  try {
-    const s = await api("/api/config");
-    lastStreamsCfg = s.files["stream.json"];
-  } catch(e) {}
   await loadConfig();
   loadStatus();
   loadOp25Debug();
