@@ -456,7 +456,7 @@ function renderStreams(d) {
   const chans = chanList(d);
   const byName = {};
   chans.forEach(c => { if (c.stream) byName[c.stream] = c; });
-  if (!lastStreamsCfg) { el.innerHTML = '<div class="center">streams not loaded</div>'; return; }
+  if (!lastStreamsCfg) return;
   lastStreamsCfg.streams.filter(s => s.enabled).forEach(s => {
     const c = byName[s.name] || null;
     const title = c && c.tgid
