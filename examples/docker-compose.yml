@@ -16,7 +16,7 @@ services:
       - /dev/bus/usb:/dev/bus/usb
     ports:
       - "8080:8080"   # web control plane
-      - "8000:8000"   # icecast (VLC / external players)
+      - "8000:8000"   # icecast (VLC / external players) — if you change the host port (e.g. "9000:8000"), also set icecast.external_port to 9000 in conf/stream.json so the web UI's Listen/Copy URL links use it
     volumes:
       - ./conf:/opt/op25/conf          # your editable config (seeded with defaults)
       - ./logs:/var/log/op25           # op25 / streams / web logs
