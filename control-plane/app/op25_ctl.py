@@ -20,7 +20,8 @@ LEVELS = {
     2: "verbose (tag file loading)",
     5: "debug (call/CC activity, TDMA masks)",
     9: "tuning (hardware tune details)",
-    10: "full (channel-control trace - very spammy)",
+     10: "full (channel-control trace - very spammy)",
+     11: "TSBK detail (all non-voice signaling)",
 }
 
 
@@ -60,7 +61,7 @@ def send(command, arg1=0, arg2=0, port=TERM_PORT, timeout=2.0):
 
 def set_debug(level, port=TERM_PORT):
     """Change op25's live log verbosity without a restart."""
-    level = max(0, min(int(level), 10))
+    level = max(0, min(int(level), 11))
     reply = send("set_debug", level, 0, port=port)
     return {"level": level, "ok": reply is not None}
 

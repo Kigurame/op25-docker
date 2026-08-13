@@ -42,8 +42,10 @@ monitoring, call history, and configuration.
 - **Role-based login** – `admin` (full access) and `viewer` (read-only) users,
   PBKDF2 password hashing, HMAC-signed session cookies.
 - **op25 diagnostics** – live log-verbosity control (`Status` tab): bump op25
-  from quiet to full channel-control tracing without a restart, and ask it to
-  dump every decoded talkgroup with activity counters straight into its log.
+  from quiet to full channel-control tracing without a restart, ask it to
+  dump every decoded talkgroup with activity counters straight into its log,
+  and toggle a **TSBK activity** feed showing every non-voice signaling block
+  (grants, patches, affiliations, registrations, band plans) live in the UI.
 - **SDR dongle diagnostics** – the `SDR` tab runs `rtl_test` on a dongle and
   reports whether it can actually open, tune and produce samples, flagging
   tuner-lock/USB failures (`PLL not locked!`, `r82xx_set_freq: failed`) that
@@ -159,7 +161,7 @@ listener auth on/off, max clients) and one or more streams:
 
 ### Checking whether op25 is receiving / decoding
 
-`cfg.json` has a top-level `verbosity` key (0–10, default 2) that sets how
+`cfg.json` has a top-level `verbosity` key (0–11, default 2) that sets how
 much op25 writes to its log (`op25.log`):
 
 | level | shows |
@@ -170,10 +172,14 @@ much op25 writes to its log (`op25.log`):
 | 5 | call/conventional activity, talkgroup counters |
 | 9 | every hardware tune step (`Tuning to frequency ...`, `Hardware tune ...`) |
 | 10 | full channel-control trace (very spammy) |
+| 11 | every decoded trunking signaling block (grants, patches, affiliations, registrations, band plans) — feeds the **Status → TSBK activity** panel |
 
 Change it live from the web UI (**Status → op25 diagnostics**) — no restart
 needed — or edit `verbosity` in `cfg.json` and restart the container to make
-it the default. When trying to diagnose a system that won't decode:
+it the default. The **TSBK detail** toggle (**Status → op25 diagnostics**)
+sets level 11 live *and* persists it in `cfg.json`, feeding the **TSBK
+activity** panel in the Status tab. When trying to diagnose a system that
+won't decode:
 
 1. **Status → op25 diagnostics** → set log level 9 and watch the op25 log:
    you should see `Tuning to frequency <your CC>` and the trunking module
@@ -233,8 +239,11 @@ SPA served at `/`; API at `/api/*`. Notable endpoints:
 | `POST /api/sdr/scan` | list detected RTL-SDR devices (for setting `rtl=<index>`) |
 | `POST /api/sdr/diag/{index}` | deep-diagnose one dongle (`rtl_test`): tuner lock, sample stream, noise floor |
 | `GET /api/op25/debug` | configured op25 verbosity + the available levels |
-| `POST /api/op25/debug/{level}` | change op25's live log verbosity (0–10) without a restart |
+| `POST /api/op25/debug/{level}` | change op25's live log verbosity (0–11) without a restart |
 | `POST /api/op25/dump-tgids` | print all decoded talkgroups (with counters) to the op25 log |
+| `GET /api/op25/tsbk` | whether TSBK detail (level 11) is currently enabled |
+| `POST /api/op25/tsbk` | toggle TSBK detail and persist it in `cfg.json` (`{"enabled": true}`) |
+| `GET /api/op25/tsbk/feed` | recent non-voice signaling lines from the op25 log |
 | `GET /stream/{mount}` | authenticated Icecast proxy (programmatic clients) |
 | `GET /api/health` | healthcheck for Docker |
 

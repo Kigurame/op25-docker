@@ -146,7 +146,7 @@ def render_supervisor(stream_json, out_path, tpl_dir, cfg_json):
         tpl = fh.read()
     ic = stream_json.get("icecast", {})
     verbosity = int(cfg_json.get("verbosity", 1)) if isinstance(cfg_json.get("verbosity"), int) else 1
-    verbosity = max(0, min(verbosity, 10))
+    verbosity = max(0, min(verbosity, 11))
     out = tpl.replace("@SUPERVISOR_PASSWORD@", ic.get("supervisor_password", "changeme"))
     out = out.replace("@OP25_VERBOSITY@", str(verbosity))
     with open(out_path, "w", encoding="utf-8") as fh:

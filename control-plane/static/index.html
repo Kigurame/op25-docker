@@ -257,8 +257,10 @@ audio { width: 100%; height: 34px; }
           <option value="5">5 &middot; debug (call/CC activity)</option>
           <option value="9">9 &middot; tuning (hardware tune)</option>
           <option value="10">10 &middot; full (very spammy)</option>
+          <option value="11">11 &middot; TSBK detail (all non-voice signaling)</option>
         </select>
         <button id="dbgSet" class="primary">Set live log level</button>
+        <button id="tsbkToggle">TSBK detail: off</button>
         <button id="dbgDump">Dump decoded talkgroups to log</button>
       </div>
       <div class="hint" id="dbgHint"></div>
@@ -266,7 +268,13 @@ audio { width: 100%; height: 34px; }
         Higher levels log every tuning step and channel-control message &mdash; watch the
         <b>op25</b> log below. Live changes reset on restart; set
         <code class="mono">verbosity</code> in cfg.json for a startup default.
+        The <b>TSBK detail</b> toggle persists in cfg.json and applies live without a restart.
       </div>
+    </div>
+    <div class="panel">
+      <h3>TSBK activity</h3>
+      <div class="hint" id="tsbkHint"></div>
+      <pre id="tsbkView" class="mono" style="background:#0a0d12;border:1px solid var(--border);border-radius:8px;padding:10px;min-height:120px;max-height:320px;overflow:auto;white-space:pre-wrap"></pre>
     </div>
     <div class="panel">
       <h3>Logs</h3>
@@ -357,8 +365,10 @@ $("loginBtn").onclick = async () => {
 $("logoutBtn").onclick = async () => { await fetch("/api/logout", {method:"POST"}); location.reload(); };
 
 // ---------------- tabs ----------------
+let activeTab = "status";
 document.querySelectorAll("nav button").forEach(b => {
   b.onclick = () => {
+    activeTab = b.dataset.tab;
     document.querySelectorAll("nav button").forEach(x => x.classList.remove("active"));
     b.classList.add("active");
     document.querySelectorAll(".tabbody").forEach(x => x.classList.remove("active"));
@@ -583,7 +593,7 @@ const CONFIG_GUIDE = {
       { path: "trunking.chans[].whitelist / blacklist", set: "1,2,3", note: "Comma-separated talkgroup IDs to restrict or block decoding." },
       { path: "trunking.chans[].wacn / sysid", set: "\"\"", note: "Optional; learned from the control channel if left empty." },
       { path: "trunking.chans[].center_frequency", set: "856000000", note: "Same control channel frequency in HERTZ." },
-      { path: "verbosity", set: "2", note: "op25 log verbosity 0..10 (0 quiet, 2 verbose, 5 debug, 9 tuning, 10 full). Change live from Status &rarr; op25 diagnostics." }
+      { path: "verbosity", set: "2", note: "op25 log verbosity 0..11 (0 quiet, 2 verbose, 5 debug, 9 tuning, 10 full, 11 TSBK detail). Change live from Status &rarr; op25 diagnostics." }
     ],
     examples: [
       { title: "700/800 MHz trunked system (Phase 1+2)", code: `{
@@ -1168,7 +1178,45 @@ $("dbgDump").onclick = async () => {
   if (logOn) setTimeout(loadLog, 300);
 };
 
-let logTimer = null, logOn = false;
+// ---------------- TSBK detail toggle + activity feed ----------------
+let tsbkOn = false;
+function tsbkButton() {
+  $("tsbkToggle").textContent = "TSBK detail: " + (tsbkOn ? "on" : "off");
+  $("tsbkToggle").classList.toggle("primary", tsbkOn);
+  if (tsbkOn) $("dbgLevel").value = "11";
+}
+async function loadTsbkState() {
+  try {
+    const d = await api("/api/op25/tsbk");
+    tsbkOn = !!d.enabled;
+    tsbkButton();
+    $("tsbkHint").textContent = tsbkOn
+      ? "Verbosity 11 persisted in cfg.json - grants, patches, affiliations, registrations, band-plan and status updates shown live. Toggle off to restore the previous level."
+      : "Level 11 is off. Toggle on to decode and show every non-voice trunking signaling block (grants, patches, affiliations, registrations, band plans).";
+  } catch(e) {}
+}
+$("tsbkToggle").onclick = async () => {
+  try {
+    const r = await api("/api/op25/tsbk", {method:"POST", body:JSON.stringify({enabled:!tsbkOn}),
+      headers:{"Content-Type":"application/json"}});
+    tsbkOn = !!r.enabled;
+    tsbkButton();
+    $("dbgLevel").value = String(r.level);
+    $("tsbkHint").textContent = r.running
+      ? r.applied
+      : r.applied + " - op25 is not running, so the level applies on its next start.";
+    if (r.enabled) loadTsbkFeed();
+  } catch(e) { $("tsbkHint").textContent = "Error: " + e.message; }
+};
+async function loadTsbkFeed() {
+  if (activeTab !== "status") return;
+  try {
+    const d = await api("/api/op25/tsbk/feed?lines=150");
+    $("tsbkView").textContent = d.lines && d.lines.length ? d.lines.join("\n") : "(no signaling decoded yet - check the toggle is on and op25 is tuned)";
+    $("tsbkView").scrollTop = $("tsbkView").scrollHeight;
+  } catch(e) {}
+}
+setInterval(loadTsbkFeed, 2000);
 function startLogAuto() {
   if (logTimer) return;
   logTimer = setInterval(() => { if (logOn) loadLog(); }, 5000);
@@ -1191,6 +1239,8 @@ $("logAuto").onclick = () => { logOn = !logOn; $("logAuto").textContent = logOn 
   await loadConfig();
   loadStatus();
   loadOp25Debug();
+  loadTsbkState();
+  loadTsbkFeed();
 })();
 </script>
 </body>

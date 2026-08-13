@@ -312,9 +312,9 @@ async def api_op25_debug_set(level: str, request: Request):
     try:
         lvl = int(level)
     except ValueError:
-        return JSONResponse({"error": "level must be an integer 0..10"}, status_code=400)
-    if lvl < 0 or lvl > 10:
-        return JSONResponse({"error": "level must be an integer 0..10"}, status_code=400)
+        return JSONResponse({"error": "level must be an integer 0..11"}, status_code=400)
+    if lvl < 0 or lvl > 11:
+        return JSONResponse({"error": "level must be an integer 0..11"}, status_code=400)
     port = _op25_terminal_port()
     return op25_ctl.set_debug(lvl, port=port)
 
@@ -336,6 +336,91 @@ def _op25_terminal_port():
     except (OSError, ValueError):
         cfg = {}
     return op25_ctl.terminal_port_from_config(cfg)
+
+
+# ------------------------------------------------------------------- tsbk feed
+
+TSBK_LEVEL = 11
+TSBK_PATTERNS = ("tsbk(0x", "mbt(0x", "unhandled")
+_tsbk_base = None
+
+
+def _tsbk_state():
+    try:
+        cfg = config_store.read_json("cfg.json")
+    except (OSError, ValueError):
+        cfg = {}
+    level = cfg.get("verbosity", 2)
+    if not isinstance(level, int):
+        level = 2
+    return cfg, level
+
+
+@app.get("/api/op25/tsbk")
+async def api_op25_tsbk(request: Request):
+    """Whether TSBK detail (verbosity 11) is currently configured/persisted."""
+    try:
+        require_user(request)
+    except PermissionError:
+        return JSONResponse({"error": "not authenticated"}, status_code=401)
+    _, level = _tsbk_state()
+    return {"enabled": level == TSBK_LEVEL, "level": level}
+
+
+@app.post("/api/op25/tsbk")
+async def api_op25_tsbk_set(request: Request):
+    """Toggle all-TSBK logging (verbosity 11) and persist it in cfg.json.
+
+    Applying it live needs no restart; the persisted level also survives a
+    later op25 restart.
+    """
+    try:
+        require_user(request, role="admin")
+    except PermissionError as e:
+        return JSONResponse({"error": str(e)}, status_code=401 if "authenticated" in str(e) else 403)
+    body = await request.json()
+    want = bool(body.get("enabled"))
+    cfg, level = _tsbk_state()
+    global _tsbk_base
+
+    if want:
+        if level == TSBK_LEVEL:
+            return {"ok": True, "enabled": True, "level": TSBK_LEVEL, "running": True, "applied": "already on"}
+        if _tsbk_base is None:
+            _tsbk_base = level
+        cfg["verbosity"] = TSBK_LEVEL
+    else:
+        if _tsbk_base is None:
+            _tsbk_base = level
+        restore = _tsbk_base if _tsbk_base != TSBK_LEVEL else 2
+        _tsbk_base = None
+        cfg["verbosity"] = restore
+
+    try:
+        config_store.write_json("cfg.json", cfg)
+        _rerender()
+        applied = "persisted to cfg.json"
+    except OSError as e:
+        return JSONResponse({"error": "write failed: %s" % e}, status_code=500)
+
+    live = op25_ctl.set_debug(cfg["verbosity"], port=_op25_terminal_port())
+    if not live["ok"]:
+        applied += " (op25 not running - will apply on restart)"
+    return {"ok": True, "enabled": cfg["verbosity"] == TSBK_LEVEL,
+            "level": cfg["verbosity"], "running": live["ok"], "applied": applied}
+
+
+@app.get("/api/op25/tsbk/feed")
+async def api_op25_tsbk_feed(request: Request, lines: int = 150):
+    """Recent non-voice trunking-signaling lines from the op25 log."""
+    try:
+        require_user(request)
+    except PermissionError:
+        return JSONResponse({"error": "not authenticated"}, status_code=401)
+    text = supervisor_ctl.tail("op25", 1000)
+    matched = [ln for ln in text.splitlines()
+               if any(p in ln.lower() for p in TSBK_PATTERNS)]
+    return {"lines": matched[-max(10, min(lines, 500)):]}
 
 
 # -------------------------------------------------------------- stream proxy
