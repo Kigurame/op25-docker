@@ -127,6 +127,11 @@ audio { width: 100%; height: 34px; }
     <div class="formrow"><label>Password</label><input type="password" id="loginPass" autocomplete="current-password"></div>
     <button class="primary" id="loginBtn" style="width:100%">Sign in</button>
     <div id="loginErr" class="msg err"></div>
+    <div class="hint" style="margin-top:12px">
+      First time? The default account is <code class="mono">admin</code> /
+      <code class="mono">admin123</code> &mdash; please change the password after
+      signing in (Config &rarr; <i>Change my password</i>).
+    </div>
   </div>
 </div>
 
@@ -174,9 +179,34 @@ audio { width: 100%; height: 34px; }
   <!-- ===================== CONFIG ===================== -->
   <div class="tabbody" id="tab-config">
     <div class="panel">
+      <h3>Quick start</h3>
+      <div class="hint" style="margin-bottom:10px">
+        New here? Three steps to listening to your local police / fire radio:
+      </div>
+      <div class="grid">
+        <div class="card">
+          <div class="row"><span class="k">1 &middot; Find your USB radio</span><button id="qsScanBtn">Scan for devices</button></div>
+          <div class="hint" style="margin-top:6px">Makes sure your dongle is connected and tells you its device number.</div>
+        </div>
+        <div class="card">
+          <div class="row"><span class="k">2 &middot; Enter your system's settings</span><button id="qsWizardBtn" class="primary">Set up my scanner</button></div>
+          <div class="hint" style="margin-top:6px">The wizard asks for your control channel, NAC and band, then sets everything up.</div>
+        </div>
+        <div class="card">
+          <div class="row"><span class="k">3 &middot; Listen</span><button id="qsLiveBtn">Go to Live tab</button></div>
+          <div class="hint" style="margin-top:6px">Open the audio stream and watch calls as they happen.</div>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:8px">
+        Don't know your control channel or NAC?
+        <a href="https://www.radioreference.com" target="_blank" rel="noopener">RadioReference.com</a>
+        has them for most US systems &mdash; look up your county or city.
+      </div>
+    </div>
+    <div class="panel">
       <h3>Configuration files</h3>
       <div class="toolbar">
-        <button id="cfgWizardBtn" class="primary">Setup wizard</button>
+        <button id="cfgWizardBtn" class="primary">Set up my scanner</button>
         <button data-cfg="cfg.json">cfg.json (op25)</button>
         <button data-cfg="stream.json">stream.json</button>
         <button data-cfg="listen.json">listen.json</button>
@@ -296,7 +326,7 @@ audio { width: 100%; height: 34px; }
 <div id="wizardOverlay">
   <div class="box">
     <div class="whead">
-      <h2>Setup wizard</h2>
+      <h2>Set up your scanner</h2>
       <button id="wizardClose">Close</button>
     </div>
     <div class="wsteps" id="wizardSteps"></div>
@@ -561,7 +591,7 @@ const fileToText = (name, v) => {
 
 const CONFIG_GUIDE = {
   "cfg.json": {
-    synopsis: "op25 receiver settings: which RTL-SDR dongle to use (rtl=<index>), the channel it tunes, and the P25 trunking system to follow (control channel, NAC, modulation).",
+    synopsis: "op25 receiver settings: which RTL-SDR dongle to use (rtl=<index>), the channel it tunes, and the P25 trunking system to follow (control channel, NAC, modulation). <b>New to this? Use the \"Set up my scanner\" wizard instead of editing this file by hand</b> &mdash; it fills everything in for you.",
     howto: [
       "In the SDR tab click \"Scan for devices\" and note the 0-based index of your dongle (0, 1, ...).",
       "Set devices[0].args to \"rtl=<index>,rtl\" and devices[0].frequency to your control channel in Hz.",
@@ -841,48 +871,62 @@ function wizDefaults() {
 
 const WIZARD_STEPS = [
   {
-    title: "1 \u00b7 SDR device",
+    title: "1 \u00b7 Your USB radio",
     render(d) { return `
       <div class="wf"><label>SDR device index</label>
         <input type="number" id="wz-sdr-index" min="0" value="${esc(d.sdr_index)}" required>
         <button id="wz-sdr-scan" class="btn" style="margin-top:6px">Scan for devices</button>
-        <div class="hint" id="wz-sdr-hint">0-based index of your RTL-SDR dongle (see the SDR tab for details).</div></div>
+        <div class="hint" id="wz-sdr-hint">The number of your USB dongle. Click "Scan for devices" and it finds it for you &mdash; a single dongle is almost always device 0.</div></div>
       <div class="wf"><label>PPM correction</label>
         <input type="number" id="wz-ppm" value="${esc(d.ppm)}">
-        <div class="hint">Crystal drift in ppm. Leave 0 to start.</div></div>
+        <div class="hint">Crystal drift. Leave 0 to start &mdash; only change it if the audio drifts or garbles after running for a while.</div></div>
       <div class="wf"><label>Tuner gain (dB)</label>
         <input type="text" id="wz-gains" value="${esc(d.gains)}">
-        <div class="hint">e.g. LNA:39. Raise only if the decode is weak.</div></div>`;
+        <div class="hint">Signal strength. Leave the default unless reception is weak (then try a slightly higher number).</div></div>`;
     }
   },
   {
-    title: "2 \u00b7 System",
+    title: "2 \u00b7 Your radio system",
     render(d) { return `
       <div class="wf"><label>System name</label>
-        <input type="text" id="wz-sysname" value="${esc(d.sysname)}"></div>
+        <input type="text" id="wz-sysname" value="${esc(d.sysname)}">
+        <div class="hint">Anything you like, e.g. "City Police".</div></div>
       <div class="wf"><label>Control channel frequency (MHz)</label>
         <input type="text" id="wz-freq" value="${esc(d.freq)}" required>
-        <div class="hint">Your P25 control channel, e.g. 856.1625. Used as the tune frequency and control_channel_list.</div></div>
+        <div class="hint">The one frequency your local system runs on, e.g. 856.1625. Look it up on <a href="https://www.radioreference.com" target="_blank" rel="noopener">RadioReference.com</a> (search your county or city).</div></div>
       <div class="wf"><label>Alternate control channels (MHz, comma-separated, optional)</label>
         <input type="text" id="wz-alts" value="${esc(d.alts)}">
-        <div class="hint">Lets op25 hunt to a backup control channel if the primary is unavailable.</div></div>
+        <div class="hint">Backup frequencies to switch to if the main control channel goes down.</div></div>
       <div class="wf"><label>Band</label>
         <select id="wz-band">
-          <option value="800" ${d.band==="800"?"selected":""}>700/800 MHz (cqpsk)</option>
-          <option value="vhf" ${d.band==="vhf"?"selected":""}>VHF/UHF (fm)</option>
-        </select></div>
+          <option value="800" ${d.band==="800"?"selected":""}>700/800 MHz (most city/county systems)</option>
+          <option value="vhf" ${d.band==="vhf"?"selected":""}>VHF/UHF (many rural systems)</option>
+        </select>
+        <div class="hint">The chunk of spectrum your system uses. RadioReference lists it on the system page.</div></div>
       <div class="wf"><label>NAC (hex)</label>
         <input type="text" id="wz-nac" value="${esc(d.nac)}" required>
-        <div class="hint">Network Access Code, e.g. 0x4a2.</div></div>
+        <div class="hint">A short code that identifies the system, e.g. 0x4a2. Often listed as "NAC" on RadioReference or scanner forums.</div></div>
       <div class="wf ck"><label>Phase 2 TDMA</label>
         <input type="checkbox" id="wz-phase2" ${d.phase2?"checked":""}>
-        <span class="hint" style="margin:0">Enable if the system uses Phase 2 TDMA talkgroups.</span></div>`;
+        <span class="hint" style="margin:0">Check this if the system is described as "Phase 2" or "Phase 1/Phase 2". Unsure? Leave it unchecked.</span></div>
+      <details style="margin-top:14px"><summary>Not sure where to find these?</summary>
+        <div class="hint" style="margin-top:8px">
+          The two things you need are the <b>control channel frequency</b> and the <b>NAC</b> of the
+          digital radio system your local police / fire / EMS use. They are not secret &mdash; they are
+          published so scanners can be programmed:
+          <ul style="margin:8px 0 0 18px;padding:0">
+            <li><a href="https://www.radioreference.com" target="_blank" rel="noopener">RadioReference.com</a> &mdash; search your county or city, open the "Trunked System" entry; the control channel and band are listed and the NAC is usually in the notes.</li>
+            <li>Local scanner enthusiast forums / Facebook groups &mdash; control channels are posted freely.</li>
+            <li>Free tools like <b>SDRTrunk</b> or <b>Unitrunker</b> can read the control channel and NAC off the air automatically.</li>
+          </ul>
+        </div>
+      </details>`;
     }
   },
   {
     title: "3 \u00b7 Advanced",
     render(d) { return `
-      <details open><summary>Talkgroup restrictions (optional)</summary>
+      <details><summary>Talkgroup restrictions (optional &mdash; usually leave this alone)</summary>
         <div class="wf" style="margin-top:10px"><label>Whitelist (only decode these talkgroups)</label>
           <input type="text" id="wz-whitelist" value="${esc(d.whitelist)}">
           <div class="hint">Comma-separated talkgroup IDs, e.g. 1001,1002.</div></div>
@@ -896,7 +940,7 @@ const WIZARD_STEPS = [
   {
     title: "4 \u00b7 Review",
     render() { return `
-      <div class="hint" style="margin-bottom:8px">Review the generated cfg.json below, then click Apply &amp; restart. op25 will be restarted automatically.</div>
+      <div class="hint" style="margin-bottom:8px">Review the generated settings below, then click Apply &amp; restart. The radio will be restarted with your settings automatically.</div>
       <pre id="wz-preview"></pre>`;
     }
   }
@@ -1035,6 +1079,15 @@ $("wizardApply").onclick = async () => {
     await applyWizardCfg(buildWizardCfg());
   } catch(e) { $("wizardErr").textContent = e.message; }
 };
+
+// ---------------- quick start (non-technical path) ----------------
+function goTab(tab) {
+  const btn = document.querySelector('nav button[data-tab="' + tab + '"]');
+  if (btn) btn.click();
+}
+$("qsScanBtn").onclick = () => { goTab("sdr"); $("scanBtn").click(); };
+$("qsWizardBtn").onclick = () => { goTab("config"); $("cfgWizardBtn").click(); };
+$("qsLiveBtn").onclick = () => goTab("dash");
 
 function renderUsers(usersCfg) {
   const el = $("usersList"); el.innerHTML = "";

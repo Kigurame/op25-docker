@@ -7,9 +7,9 @@ files on your host**, not inside the image.
 Each JSON file contains a `_template_notes` key with inline guidance, and the
 web UI (Config tab) lets you edit every file — saving re-renders runtime
 configs and restarts the affected service. For the quickest start, use the
-**Config → Setup wizard**: it asks for the SDR device index, control channel
-frequency (MHz), NAC, band and Phase 2 option, then generates `cfg.json` for
-you.
+**Config → Set up my scanner** wizard: it asks for the SDR device index,
+control channel frequency (MHz), NAC, band and Phase 2 option, then generates
+`cfg.json` for you.
 
 | file | purpose |
 |------|---------|
