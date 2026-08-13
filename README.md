@@ -3,16 +3,11 @@
 This project was made with the help of an LLM initially just out of curiosity
 Just to see how far current models can take things. But because the end result
 was far more usable than initially imagined. I decided to set it free for anyone 
-<<<<<<< HEAD
 To use or build upon as a base for their own project.
 
 **So please treat this for what it is**
 
 # No vulnerability testing was done on this project so for all that is holy do not expose it to the internet.
-=======
-to use or build upon as a base for their own project.
-** So please treat this for what it is**
->>>>>>> fe1e5d6cca65533b20b9c4b7e4c9bfbfd6d2b042
 
 # op25-docker
 
