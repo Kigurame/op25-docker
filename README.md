@@ -3,7 +3,7 @@
 This project was made with the help of an LLM initially just out of curiosity
 Just to see how far current models can take things. But because the end result
 was far more usable than initially imagined. I decided to set it free for anyone 
-To use or build upon as a base for their own project.
+to use or build upon as a base for their own project.
 ** So please treat this for what it is**
 
 # op25-docker
