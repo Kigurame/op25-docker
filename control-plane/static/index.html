@@ -523,7 +523,7 @@ function renderStreams(d) {
 
 function streamUrlFor(mount) {
   const ic = (lastStreamsCfg && lastStreamsCfg.icecast) || {};
-  const port = ic.port || 8000;
+  const port = ic.external_port || ic.port || 8000;
   const host = location.hostname || "127.0.0.1";
   let url = "http://" + host + ":" + port + mount;
   if (ic.listener_auth) {
@@ -662,10 +662,12 @@ const CONFIG_GUIDE = {
       "Change icecast.source_password, icecast.admin_password and icecast.supervisor_password from the defaults.",
       "Decide whether listeners must log in: icecast.listener_auth true uses the accounts in listen.json, false opens the feed.",
       "For each entry in streams[]: udp_port must match a channel destination port in cfg.json, mount is the listening URL path (e.g. /primary.mp3), codec is mp3 or aac, bitrate_kbps sets the encoder quality.",
+      "If you expose the stream on a different port than icecast.port (e.g. you mapped 8000 to 9000 in docker-compose), set icecast.external_port to the public port so the Listen / Copy URL links in the Live tab point at it. This only changes the displayed link.",
       "Save — icecast + streams restart automatically."
     ],
     fields: [
       { path: "icecast.host / port", set: "127.0.0.1 / 8000", note: "Where Icecast listens (defaults are fine)." },
+      { path: "icecast.external_port", set: "(leave empty)", note: "Optional: the port listeners use from OUTSIDE the container. Set this only if you publish the stream on a different port than 'port' (e.g. docker-compose maps 8000 to 9000). It changes just the Listen / Copy URL links — Icecast still listens on 'port'." },
       { path: "icecast.source_password", set: "changeme-source", note: "Used by stream_runner to push audio — change it." },
       { path: "icecast.admin_password", set: "changeme-admin", note: "Icecast admin web UI password — change it." },
       { path: "icecast.supervisor_password", set: "changeme-supervisor", note: "Used by the control plane to restart services — change it." },

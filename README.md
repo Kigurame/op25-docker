@@ -125,6 +125,13 @@ The **Live** tab's **Copy URL** button gives you a ready-to-paste link
 (credentials included) for any stream. Want no password? Set
 `icecast.listener_auth` to `false` in `stream.json`.
 
+**Exposed the stream on a different port?** The container's Icecast always
+listens on port **8000** internally, but you might map it to another port on
+the outside of the container (for example `8000:9000` in your
+`docker-compose.yml`). If so, set `icecast.external_port` to the public port
+(e.g. `9000`) in `stream.json` — the **Listen** and **Copy URL** links will
+then point at the right port. Nothing else changes.
+
 ## Nice extras
 
 - **Name your talkgroups and radios** — add labels in **Config → tgid.tsv**

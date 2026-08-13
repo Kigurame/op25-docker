@@ -1,7 +1,7 @@
 {
     "_template_notes": {
         "about": "Template for op25-docker. Change the passwords and match udp_port to cfg.json, then save (restarts icecast + streams). Full walkthrough: docs/SETUP.md.",
-        "icecast": "Change source_password / admin_password / supervisor_password from the defaults. listener_auth true means listeners must use an account from listen.json.",
+        "icecast": "Change source_password / admin_password / supervisor_password from the defaults. listener_auth true means listeners must use an account from listen.json. 'external_port' (optional): if you publish the stream to a DIFFERENT port than 'port' on the outside of the container (e.g. you mapped 8000 -> 9000 in docker-compose), set external_port to that public port so the Listen/Copy URL links in the web UI use it. It only changes the displayed link - Icecast still actually listens on 'port'.",
         "streams": "One entry per Icecast mount. 'udp_port' must match the channel 'destination' port in cfg.json. 'mount' is the listening URL path (e.g. /primary.mp3), 'codec' is mp3 or aac, 'bitrate_kbps' sets encoder quality, 'gain_db' boosts volume (-30..30, 0 = off)."
     },
     "icecast": {

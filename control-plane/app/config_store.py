@@ -118,6 +118,8 @@ def validate_streams(s):
         raise ConfigError("stream.json must contain an 'icecast' section")
     _require_str(ic.get("host", "127.0.0.1"), "icecast.host")
     _require_int(ic.get("port", 8000), "icecast.port", 1, 65535)
+    if "external_port" in ic and ic["external_port"] is not None:
+        _require_int(ic["external_port"], "icecast.external_port", 1, 65535)
     _require_int(ic.get("max_clients", 64), "icecast.max_clients")
     _require_int(ic.get("max_listeners_per_mount", 16), "icecast.max_listeners_per_mount")
     if not isinstance(ic.get("listener_auth", True), bool):

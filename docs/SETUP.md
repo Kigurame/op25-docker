@@ -103,6 +103,12 @@ http://<host>:8000/primary.mp3      username: scanner   password: listen123
   `bitrate_kbps` (quality) to taste.
 - Change the Icecast passwords (`source` / `admin` / `supervisor`) in
   `stream.json` from their `changeme-*` defaults.
+- **Different public port?** The container's Icecast always listens on port
+  8000 internally, but if you map it to another port on the outside (e.g.
+  `8000:9000` in `docker-compose.yml`), set `icecast.external_port` to that
+  public port in `stream.json` so the **Listen** / **Copy URL** links in the
+  web UI point at it. It only affects the displayed link — the actual stream
+  config is unchanged.
 
 The control plane also proxies the feed at `GET /stream/<mount>` for logged-in
 programmatic clients that shouldn't talk to Icecast directly.
@@ -202,6 +208,7 @@ automatically; saving a `cfg.json` with a missing or mismatched
 | `gain_db` | volume boost in dB (-30..30, 0 = off) |
 | `icecast_name` / `icecast_description` / `icecast_genre` | stream metadata |
 | `icecast.listener_auth` | `true` = listeners must use a `listen.json` account; `false` = open feed |
+| `icecast.external_port` | optional — the public port listeners use *outside* the container if you map `icecast.port` to something else (e.g. `8000:9000`). Only changes the Listen/Copy URL links, not the actual stream |
 | `icecast.source/admin/supervisor_password` | Icecast credentials — change from `changeme-*` defaults |
 
 ### Channel ↔ stream mapping
