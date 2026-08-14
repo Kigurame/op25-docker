@@ -14,7 +14,9 @@ import hashlib
 import json
 import os
 import re
+import stat
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape, quoteattr
 
@@ -34,6 +36,29 @@ def _resolve_keyfile(keyfile, conf_dir):
     if os.path.isabs(keyfile):
         return keyfile
     return os.path.join(conf_dir, keyfile)
+
+def _atomic_write(path, content):
+    directory = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=os.path.basename(path) + ".")
+    try:
+        try:
+            mode = os.stat(path).st_mode
+        except OSError:
+            mode = None
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(content)
+            fh.flush()
+            os.fsync(fh.fileno())
+        if mode is not None:
+            os.chmod(tmp, stat.S_IMODE(mode))
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
 
 def _chown_icecast(path):
     try:
@@ -163,8 +188,7 @@ def render_icecast(stream_json, listen_json, out_dir, tpl_dir):
     except ET.ParseError as e:
         raise ValueError("generated icecast.xml is not well-formed; check stream.json values: %s" % e)
 
-    with open(os.path.join(out_dir, "icecast.xml"), "w", encoding="utf-8") as fh:
-        fh.write(out)
+    _atomic_write(os.path.join(out_dir, "icecast.xml"), out)
 
     # htpasswd for listener auth
     lines = []
@@ -172,8 +196,7 @@ def render_icecast(stream_json, listen_json, out_dir, tpl_dir):
         user = _assert_single_line(u["username"], "listen.json users[].username")
         pw = _assert_single_line(u.get("password", ""), "listen.json users[].password")
         lines.append("%s:%s" % (user, md5_hash(pw)))
-    with open(htpasswd_file, "w", encoding="utf-8") as fh:
-        fh.write("\n".join(lines) + "\n")
+    _atomic_write(htpasswd_file, "\n".join(lines) + "\n")
     _chown_icecast(htpasswd_file)
 
 
@@ -190,8 +213,7 @@ def render_supervisor(stream_json, out_path, tpl_dir, cfg_json):
                                    "icecast.supervisor_password")
     out = tpl.replace("@SUPERVISOR_PASSWORD@", password)
     out = out.replace("@OP25_VERBOSITY@", str(verbosity))
-    with open(out_path, "w", encoding="utf-8") as fh:
-        fh.write(out)
+    _atomic_write(out_path, out)
 
 
 def main():
@@ -216,9 +238,8 @@ def main():
     cfg_json = load("cfg.json")
 
     normalize_crypt(cfg_json, conf_dir)
-    with open(os.path.join(out_dir, "cfg.json"), "w", encoding="utf-8") as fh:
-        json.dump(cfg_json, fh, indent=4, ensure_ascii=False)
-        fh.write("\n")
+    _atomic_write(os.path.join(out_dir, "cfg.json"),
+                  json.dumps(cfg_json, indent=4, ensure_ascii=False) + "\n")
 
     render_icecast(stream_json, listen_json, out_dir, args.tpl_dir)
     render_supervisor(stream_json, args.supervisor_conf, args.tpl_dir, cfg_json)

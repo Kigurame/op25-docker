@@ -1,6 +1,8 @@
 """Read/write of the on-disk JSON configuration files."""
 import json
 import os
+import stat
+import tempfile
 
 CONF_DIR = os.environ.get("OP25_CONF_DIR", "/opt/op25/conf")
 CONF_FILES = ["cfg.json", "stream.json", "users.json", "listen.json", "tags/tgid.tsv", "tags/rid.tsv"]
@@ -14,15 +16,36 @@ def _path(name):
     return os.path.join(CONF_DIR, name)
 
 
+def _atomic_write(path, content):
+    directory = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=os.path.basename(path) + ".")
+    try:
+        try:
+            mode = os.stat(path).st_mode
+        except OSError:
+            mode = None
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(content)
+            fh.flush()
+            os.fsync(fh.fileno())
+        if mode is not None:
+            os.chmod(tmp, stat.S_IMODE(mode))
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def read_json(name):
     with open(_path(name), "r", encoding="utf-8") as fh:
         return json.load(fh)
 
 
 def write_json(name, data):
-    with open(_path(name), "w", encoding="utf-8") as fh:
-        json.dump(data, fh, indent=4, ensure_ascii=False)
-        fh.write("\n")
+    _atomic_write(_path(name), json.dumps(data, indent=4, ensure_ascii=False) + "\n")
 
 
 def read_text(name):
@@ -31,8 +54,7 @@ def read_text(name):
 
 
 def write_text(name, data):
-    with open(_path(name), "w", encoding="utf-8") as fh:
-        fh.write(data)
+    _atomic_write(_path(name), data)
 
 
 def read_all():
