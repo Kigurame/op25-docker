@@ -17,6 +17,9 @@ def _path(name):
 
 
 def _atomic_write(path, content):
+    # Resolve symlinks first so a write updates the linked file instead of
+    # replacing the link itself with a plain file.
+    path = os.path.realpath(path)
     directory = os.path.dirname(path) or "."
     fd, tmp = tempfile.mkstemp(dir=directory, prefix=os.path.basename(path) + ".")
     try:
@@ -31,6 +34,15 @@ def _atomic_write(path, content):
         if mode is not None:
             os.chmod(tmp, stat.S_IMODE(mode))
         os.replace(tmp, path)
+        # fsync the directory so the rename survives a crash/power loss.
+        try:
+            dfd = os.open(directory, os.O_RDONLY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
+        except OSError:
+            pass
     except BaseException:
         try:
             os.unlink(tmp)

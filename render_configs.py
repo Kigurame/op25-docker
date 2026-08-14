@@ -38,6 +38,9 @@ def _resolve_keyfile(keyfile, conf_dir):
     return os.path.join(conf_dir, keyfile)
 
 def _atomic_write(path, content):
+    # Resolve symlinks first so a write updates the linked file instead of
+    # replacing the link itself with a plain file.
+    path = os.path.realpath(path)
     directory = os.path.dirname(path) or "."
     fd, tmp = tempfile.mkstemp(dir=directory, prefix=os.path.basename(path) + ".")
     try:
@@ -52,6 +55,15 @@ def _atomic_write(path, content):
         if mode is not None:
             os.chmod(tmp, stat.S_IMODE(mode))
         os.replace(tmp, path)
+        # fsync the directory so the rename survives a crash/power loss.
+        try:
+            dfd = os.open(directory, os.O_RDONLY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
+        except OSError:
+            pass
     except BaseException:
         try:
             os.unlink(tmp)
@@ -74,8 +86,10 @@ def normalize_crypt(cfg_json, conf_dir):
     """Encrypted traffic is ignored unless the user provides a keys file.
 
     op25's `crypt_behavior` values: 0 = allow (decode when a key is loaded),
-    2 = skip (never tune encrypted talkgroups). We derive it from the presence
-    of an op25 keys file so the out-of-the-box default ignores encryption:
+    2 = skip (never tune encrypted talkgroups). By default it is derived from
+    the presence of an op25 keys file so the out-of-the-box default ignores
+    encryption; an explicitly-set non-default value (1 = silence, 0 = allow,
+    -1 = encrypted only) is preserved across renders:
 
       - channels[i].crypt_keys is a path to a keys file
         (keyid -> {algid, key[]}, see example_keys.json). Empty/missing file =>
@@ -83,12 +97,20 @@ def normalize_crypt(cfg_json, conf_dir):
         made absolute so multi_rx can open it from its working directory.
       - trunking.chans[].crypt_behavior mirrors the channel behaviour so the
         trunking module skips encrypted grants instead of tuning them.
+
+    Returns (cfg_json, warnings). warnings lists configured crypt_keys paths
+    that do not exist on disk, so a typo'd path can't silently disable
+    decryption.
     """
+    warnings = []
     for ch in cfg_json.get("channels", []):
         keyfile = _resolve_keyfile(ch.get("crypt_keys", ""), conf_dir)
+        if ch.get("crypt_keys") and not os.path.isfile(keyfile):
+            warnings.append("crypt_keys path not found: %s" % keyfile)
         has_keys = bool(keyfile) and os.path.isfile(keyfile)
         ch["crypt_keys"] = keyfile if has_keys else ""
-        ch["crypt_behavior"] = CRYPT_ALLOW if has_keys else CRYPT_SKIP
+        if not _explicit_crypt(ch.get("crypt_behavior")):
+            ch["crypt_behavior"] = CRYPT_ALLOW if has_keys else CRYPT_SKIP
     key_by_sys = {}
     for ch in cfg_json.get("channels", []):
         if ch.get("trunking_sysname") and ch.get("crypt_keys"):
@@ -96,8 +118,15 @@ def normalize_crypt(cfg_json, conf_dir):
     fallback_keys = next((ch.get("crypt_keys") for ch in cfg_json.get("channels", []) if ch.get("crypt_keys")), "")
     for sys in cfg_json.get("trunking", {}).get("chans", []):
         keys = key_by_sys.get(sys.get("sysname"), fallback_keys)
-        sys["crypt_behavior"] = CRYPT_ALLOW if keys else CRYPT_SKIP
-    return cfg_json
+        if not _explicit_crypt(sys.get("crypt_behavior")):
+            sys["crypt_behavior"] = CRYPT_ALLOW if keys else CRYPT_SKIP
+    return cfg_json, warnings
+
+
+def _explicit_crypt(value):
+    """Anything other than the auto-managed default ('skip' = 2) is a
+    deliberate user choice and must survive re-rendering."""
+    return value is not None and value != CRYPT_SKIP
 
 
 _INVALID_XML_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
@@ -167,6 +196,12 @@ def render_icecast(stream_json, listen_json, out_dir, tpl_dir):
         tpl = fh.read()
 
     ic = stream_json.get("icecast", {})
+    # Control chars in these passwords would produce a config that icecast
+    # (and stream_runner's ffmpeg URL) can't honour, so reject them up front.
+    source_pw = _assert_single_line(ic.get("source_password", "changeme"),
+                                    "icecast.source_password")
+    admin_pw = _assert_single_line(ic.get("admin_password", "changeme"),
+                                   "icecast.admin_password")
     listener_auth = bool(ic.get("listener_auth", listen_json.get("auth", False)))
     htpasswd_file = os.path.join(out_dir, "htpasswd")
     mounts = render_mounts(
@@ -178,8 +213,8 @@ def render_icecast(stream_json, listen_json, out_dir, tpl_dir):
 
     out = tpl
     out = out.replace("@MAX_CLIENTS@", str(int(ic.get("max_clients", 64))))
-    out = out.replace("@SOURCE_PASSWORD@", _xml_text(ic.get("source_password", "changeme")))
-    out = out.replace("@ADMIN_PASSWORD@", _xml_text(ic.get("admin_password", "changeme")))
+    out = out.replace("@SOURCE_PASSWORD@", _xml_text(source_pw))
+    out = out.replace("@ADMIN_PASSWORD@", _xml_text(admin_pw))
     out = out.replace("@ICECAST_PORT@", str(int(ic.get("port", 8000))))
     out = out.replace("@MOUNTS@", mounts)
 
@@ -188,7 +223,9 @@ def render_icecast(stream_json, listen_json, out_dir, tpl_dir):
     except ET.ParseError as e:
         raise ValueError("generated icecast.xml is not well-formed; check stream.json values: %s" % e)
 
-    _atomic_write(os.path.join(out_dir, "icecast.xml"), out)
+    icecast_xml = os.path.join(out_dir, "icecast.xml")
+    _atomic_write(icecast_xml, out)
+    _chown_icecast(icecast_xml)
 
     # htpasswd for listener auth
     lines = []
@@ -237,7 +274,7 @@ def main():
     listen_json = load("listen.json")
     cfg_json = load("cfg.json")
 
-    normalize_crypt(cfg_json, conf_dir)
+    cfg_json, crypt_warnings = normalize_crypt(cfg_json, conf_dir)
     _atomic_write(os.path.join(out_dir, "cfg.json"),
                   json.dumps(cfg_json, indent=4, ensure_ascii=False) + "\n")
 
@@ -249,6 +286,8 @@ def main():
         print("crypt: keys file(s) found -> encrypted traffic will be decrypted (%s)" % ", ".join(keyed))
     else:
         print("crypt: no keys file -> encrypted talkgroups are ignored")
+    for w in crypt_warnings:
+        print("crypt: warning: %s" % w)
     print("rendered /etc/op25/cfg.json, icecast.xml, htpasswd, supervisord.conf from %s" % conf_dir)
     return 0
 

@@ -1,4 +1,5 @@
 """op25-docker control plane - FastAPI application."""
+import copy
 import json
 import os
 import subprocess
@@ -131,11 +132,13 @@ def api_change_password(request: Request, body: dict = Body(...)):
 @app.get("/api/config")
 async def api_config(request: Request):
     try:
-        require_user(request)
+        payload = require_user(request)
     except PermissionError:
         return JSONResponse({"error": "not authenticated"}, status_code=401)
     try:
         data = config_store.read_all()
+        if payload.get("r") != "admin":
+            data = _redact_for_viewer(data)
         meta = {}
         for name in config_store.CONF_FILES:
             p = os.path.join(CONF_DIR, name)
@@ -146,6 +149,37 @@ async def api_config(request: Request):
         return {"files": data, "mtime": meta}
     except OSError as e:
         return JSONResponse({"error": "cannot read config: %s" % e}, status_code=500)
+
+
+VIEWER_REDACT = "********"
+
+
+def _redact_for_viewer(data):
+    """Strip credentials a viewer has no use for: icecast source/admin
+    passwords (which would allow pushing a stream or administering icecast)
+    and the pbkdf2 password hashes (which could be brute-forced offline).
+
+    Listener passwords in listen.json are intentionally kept: the Listen/Copy
+    URL links in the UI embed them so viewers can play the stream outside the
+    web player, and viewers can't save config anyway (PUT is admin-only).
+    """
+    out = {}
+    for name, value in data.items():
+        if not isinstance(value, dict):
+            out[name] = value
+            continue
+        v = copy.deepcopy(value)
+        if name == "stream.json":
+            ic = v.setdefault("icecast", {})
+            for key in ("source_password", "admin_password", "supervisor_password"):
+                if key in ic:
+                    ic[key] = VIEWER_REDACT
+        elif name == "users.json":
+            for u in v.get("users", []):
+                if "password_hash" in u:
+                    u["password_hash"] = VIEWER_REDACT
+        out[name] = v
+    return out
 
 
 @app.put("/api/config/{name:path}")
@@ -181,22 +215,44 @@ def api_config_put(name: str, request: Request, body: dict = Body(...)):
 
     applied = []
     if name == "cfg.json":
-        _rerender()
+        ok, msg = _rerender()
+        if not ok:
+            # The file was saved to conf/ but /etc/op25 is stale; restarting
+            # now would run the old config silently, so refuse.
+            return JSONResponse({"error": "config saved but not applied - render failed: %s" % msg}, status_code=500)
         supervisor_ctl.restart("op25")
         applied.append("op25 restarted (config re-rendered)")
     elif name in ("stream.json", "listen.json"):
-        _rerender()
+        ok, msg = _rerender()
+        if not ok:
+            return JSONResponse({"error": "config saved but not applied - render failed: %s" % msg}, status_code=500)
         supervisor_ctl.restart("icecast")
         supervisor_ctl.restart("streams")
         applied.append("icecast + streams restarted")
+    elif name.startswith("tags/"):
+        # op25 reads the tag files at startup, so a restart is required to
+        # reload them; without it the edit would silently have no effect.
+        supervisor_ctl.restart("op25")
+        applied.append("op25 restarted (tag files reloaded)")
     return {"ok": True, "applied": applied}
 
 
 def _rerender():
+    """Render /etc/op25 from conf/. Returns (ok, message).
+
+    Renders before any restart so hand-edits to the mounted conf volume are
+    picked up; the rendered files under /etc/op25 would otherwise stay stale
+    until the next container boot."""
     try:
-        subprocess.run(RENDER, capture_output=True, text=True, timeout=30)
-    except OSError:
-        pass
+        r = subprocess.run(RENDER, capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        return False, "render_configs timed out"
+    except OSError as e:
+        return False, "render_configs failed to start: %s" % e
+    out = (r.stdout + r.stderr).strip()
+    if r.returncode != 0:
+        return False, "render_configs exited %d: %s" % (r.returncode, out)
+    return True, out
 
 
 @app.post("/api/restart/{program}")
@@ -207,8 +263,12 @@ def api_restart(program: str, request: Request):
         return JSONResponse({"error": str(e)}, status_code=401 if "authenticated" in str(e) else 403)
     if program not in ("op25", "icecast", "streams", "web"):
         return JSONResponse({"error": "unknown program"}, status_code=404)
-    if program in ("streams", "icecast"):
-        _rerender()
+    # Re-render from conf/ first so the restart runs the latest config even
+    # when it was edited by hand on the host volume.
+    if program in ("op25", "icecast", "streams"):
+        ok, msg = _rerender()
+        if not ok:
+            return JSONResponse({"error": "render failed: %s" % msg}, status_code=500)
     if program == "web":
         code, out = supervisor_ctl.restart_delayed("web")
     else:
@@ -405,8 +465,10 @@ def api_op25_tsbk_set(request: Request, body: dict = Body(...)):
         except OSError as e:
             return JSONResponse({"error": "write failed: %s" % e}, status_code=500)
 
-    _rerender()
+    ok, rmsg = _rerender()
     applied = "persisted to cfg.json"
+    if not ok:
+        applied = "persisted to cfg.json but re-render failed: %s" % rmsg
     live = op25_ctl.set_debug(cfg["verbosity"], port=_op25_terminal_port())
     if not live["ok"]:
         applied += " (op25 not running - will apply on restart)"
