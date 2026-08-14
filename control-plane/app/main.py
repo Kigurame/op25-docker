@@ -19,6 +19,7 @@ RENDER = ["/opt/op25/venv/bin/python", "/opt/op25/render_configs.py",
           "--conf-dir", CONF_DIR, "--tpl-dir", "/opt/op25/defaults",
           "--out-dir", "/etc/op25", "--supervisor-conf", "/etc/op25/supervisord.conf"]
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static")
+STATIC_REAL = os.path.realpath(STATIC_DIR)
 
 
 # ---------------------------------------------------------------- auth helpers
@@ -504,7 +505,8 @@ async def spa():
 @app.get("/{path}")
 async def spa_fallback(path: str):
     if "." in path:
-        fp = os.path.join(STATIC_DIR, path)
-        if os.path.isfile(fp):
-            return FileResponse(fp)
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"), headers=NO_CACHE)
+        fp = os.path.realpath(os.path.join(STATIC_REAL, path))
+        if (os.path.commonpath([STATIC_REAL, fp]) == STATIC_REAL
+                and os.path.isfile(fp)):
+            return FileResponse(fp, headers=NO_CACHE)
+    return FileResponse(os.path.join(STATIC_REAL, "index.html"), headers=NO_CACHE)
