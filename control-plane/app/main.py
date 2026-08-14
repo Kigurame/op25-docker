@@ -2,11 +2,12 @@
 import json
 import os
 import subprocess
+import threading
 import time
 import urllib.parse
 
 import httpx
-from fastapi import FastAPI, Request, Response
+from fastapi import Body, FastAPI, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from . import auth, config_store, op25_ctl, sdr, supervisor_ctl
@@ -20,6 +21,8 @@ RENDER = ["/opt/op25/venv/bin/python", "/opt/op25/render_configs.py",
           "--out-dir", "/etc/op25", "--supervisor-conf", "/etc/op25/supervisord.conf"]
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static")
 STATIC_REAL = os.path.realpath(STATIC_DIR)
+
+CONFIG_LOCK = threading.Lock()
 
 
 # ---------------------------------------------------------------- auth helpers
@@ -70,56 +73,56 @@ async def api_me(request: Request):
 
 
 @app.post("/api/users")
-async def api_add_user(request: Request):
+def api_add_user(request: Request, body: dict = Body(...)):
     try:
         require_user(request, role="admin")
     except PermissionError as e:
         return JSONResponse({"error": str(e)}, status_code=401 if "authenticated" in str(e) else 403)
-    body = await request.json()
     un = str(body.get("username", "")).strip()
     pw = str(body.get("password", ""))
     role = str(body.get("role", "viewer"))
     if not un or len(pw) < 6:
         return JSONResponse({"error": "username required, password min 6 characters"}, status_code=400)
-    try:
-        users = config_store.read_json("users.json")
-    except (OSError, ValueError):
-        return JSONResponse({"error": "cannot read users.json"}, status_code=500)
-    if any(u.get("username") == un for u in users.get("users", [])):
-        return JSONResponse({"error": "user already exists"}, status_code=409)
-    users.setdefault("users", []).append({
-        "username": un,
-        "name": body.get("name", un),
-        "role": role if role in ("admin", "viewer") else "viewer",
-        "password_hash": auth.hash_password(pw),
-        "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    })
-    config_store.write_json("users.json", users)
+    with CONFIG_LOCK:
+        try:
+            users = config_store.read_json("users.json")
+        except (OSError, ValueError):
+            return JSONResponse({"error": "cannot read users.json"}, status_code=500)
+        if any(u.get("username") == un for u in users.get("users", [])):
+            return JSONResponse({"error": "user already exists"}, status_code=409)
+        users.setdefault("users", []).append({
+            "username": un,
+            "name": body.get("name", un),
+            "role": role if role in ("admin", "viewer") else "viewer",
+            "password_hash": auth.hash_password(pw),
+            "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        })
+        config_store.write_json("users.json", users)
     return {"ok": True}
 
 
 @app.post("/api/change-password")
-async def api_change_password(request: Request):
+def api_change_password(request: Request, body: dict = Body(...)):
     try:
         u = require_user(request)
     except PermissionError:
         return JSONResponse({"error": "not authenticated"}, status_code=401)
-    body = await request.json()
     old = body.get("old_password", "")
     new = body.get("new_password", "")
     if len(new) < 6:
         return JSONResponse({"error": "new password must be at least 6 characters"}, status_code=400)
-    try:
-        users = config_store.read_json("users.json")
-    except (OSError, ValueError):
-        return JSONResponse({"error": "cannot read users.json"}, status_code=500)
-    for entry in users.get("users", []):
-        if entry.get("username") == u["u"]:
-            if not auth.verify_password(old, entry.get("password_hash", "")):
-                return JSONResponse({"error": "current password is incorrect"}, status_code=400)
-            entry["password_hash"] = auth.hash_password(new)
-            config_store.write_json("users.json", users)
-            return {"ok": True}
+    with CONFIG_LOCK:
+        try:
+            users = config_store.read_json("users.json")
+        except (OSError, ValueError):
+            return JSONResponse({"error": "cannot read users.json"}, status_code=500)
+        for entry in users.get("users", []):
+            if entry.get("username") == u["u"]:
+                if not auth.verify_password(old, entry.get("password_hash", "")):
+                    return JSONResponse({"error": "current password is incorrect"}, status_code=400)
+                entry["password_hash"] = auth.hash_password(new)
+                config_store.write_json("users.json", users)
+                return {"ok": True}
     return JSONResponse({"error": "user not found"}, status_code=404)
 
 
@@ -146,7 +149,7 @@ async def api_config(request: Request):
 
 
 @app.put("/api/config/{name:path}")
-async def api_config_put(name: str, request: Request):
+def api_config_put(name: str, request: Request, body: dict = Body(...)):
     try:
         require_user(request, role="admin")
     except PermissionError as e:
@@ -154,27 +157,27 @@ async def api_config_put(name: str, request: Request):
     allowed = list(config_store.CONF_FILES)
     if name not in allowed:
         return JSONResponse({"error": "unknown config file"}, status_code=404)
-    body = await request.json()
     text = body.get("content", body.get("data"))
-    try:
-        if name.endswith(".json"):
-            if isinstance(text, str):
-                data = json.loads(text)
+    with CONFIG_LOCK:
+        try:
+            if name.endswith(".json"):
+                if isinstance(text, str):
+                    data = json.loads(text)
+                else:
+                    data = text
+                if name == "cfg.json":
+                    config_store.validate_cfg(data)
+                elif name == "stream.json":
+                    config_store.validate_streams(data)
+                config_store.write_json(name, data)
             else:
-                data = text
-            if name == "cfg.json":
-                config_store.validate_cfg(data)
-            elif name == "stream.json":
-                config_store.validate_streams(data)
-            config_store.write_json(name, data)
-        else:
-            if not isinstance(text, str):
-                return JSONResponse({"error": "text content required"}, status_code=400)
-            config_store.write_text(name, text)
-    except (ValueError, config_store.ConfigError) as e:
-        return JSONResponse({"error": "invalid config: %s" % e}, status_code=400)
-    except OSError as e:
-        return JSONResponse({"error": "write failed: %s" % e}, status_code=500)
+                if not isinstance(text, str):
+                    return JSONResponse({"error": "text content required"}, status_code=400)
+                config_store.write_text(name, text)
+        except (ValueError, config_store.ConfigError) as e:
+            return JSONResponse({"error": "invalid config: %s" % e}, status_code=400)
+        except OSError as e:
+            return JSONResponse({"error": "write failed: %s" % e}, status_code=500)
 
     applied = []
     if name == "cfg.json":
@@ -197,7 +200,7 @@ def _rerender():
 
 
 @app.post("/api/restart/{program}")
-async def api_restart(program: str, request: Request):
+def api_restart(program: str, request: Request):
     try:
         require_user(request, role="admin")
     except PermissionError as e:
@@ -369,7 +372,7 @@ async def api_op25_tsbk(request: Request):
 
 
 @app.post("/api/op25/tsbk")
-async def api_op25_tsbk_set(request: Request):
+def api_op25_tsbk_set(request: Request, body: dict = Body(...)):
     """Toggle all-TSBK logging (verbosity 11) and persist it in cfg.json.
 
     Applying it live needs no restart; the persisted level also survives a
@@ -379,31 +382,31 @@ async def api_op25_tsbk_set(request: Request):
         require_user(request, role="admin")
     except PermissionError as e:
         return JSONResponse({"error": str(e)}, status_code=401 if "authenticated" in str(e) else 403)
-    body = await request.json()
     want = bool(body.get("enabled"))
-    cfg, level = _tsbk_state()
     global _tsbk_base
+    with CONFIG_LOCK:
+        cfg, level = _tsbk_state()
 
-    if want:
-        if level == TSBK_LEVEL:
-            return {"ok": True, "enabled": True, "level": TSBK_LEVEL, "running": True, "applied": "already on"}
-        if _tsbk_base is None:
-            _tsbk_base = level
-        cfg["verbosity"] = TSBK_LEVEL
-    else:
-        if _tsbk_base is None:
-            _tsbk_base = level
-        restore = _tsbk_base if _tsbk_base != TSBK_LEVEL else 2
-        _tsbk_base = None
-        cfg["verbosity"] = restore
+        if want:
+            if level == TSBK_LEVEL:
+                return {"ok": True, "enabled": True, "level": TSBK_LEVEL, "running": True, "applied": "already on"}
+            if _tsbk_base is None:
+                _tsbk_base = level
+            cfg["verbosity"] = TSBK_LEVEL
+        else:
+            if _tsbk_base is None:
+                _tsbk_base = level
+            restore = _tsbk_base if _tsbk_base != TSBK_LEVEL else 2
+            _tsbk_base = None
+            cfg["verbosity"] = restore
 
-    try:
-        config_store.write_json("cfg.json", cfg)
-        _rerender()
-        applied = "persisted to cfg.json"
-    except OSError as e:
-        return JSONResponse({"error": "write failed: %s" % e}, status_code=500)
+        try:
+            config_store.write_json("cfg.json", cfg)
+        except OSError as e:
+            return JSONResponse({"error": "write failed: %s" % e}, status_code=500)
 
+    _rerender()
+    applied = "persisted to cfg.json"
     live = op25_ctl.set_debug(cfg["verbosity"], port=_op25_terminal_port())
     if not live["ok"]:
         applied += " (op25 not running - will apply on restart)"
