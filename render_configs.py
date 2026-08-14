@@ -13,7 +13,10 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
+import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape, quoteattr
 
 
 def md5_hash(password):
@@ -72,6 +75,27 @@ def normalize_crypt(cfg_json, conf_dir):
     return cfg_json
 
 
+_INVALID_XML_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+_INVALID_SINGLE_LINE = re.compile(r"[\x00-\x1f]")
+
+
+def _xml_text(value):
+    return escape(_INVALID_XML_CHARS.sub("", str(value)))
+
+
+def _xml_attr(value):
+    return quoteattr(_INVALID_XML_CHARS.sub("", str(value)))
+
+
+def _assert_single_line(value, name):
+    text = str(value)
+    bad = _INVALID_SINGLE_LINE.search(text)
+    if bad:
+        raise ValueError("%s contains an illegal control character (0x%02x)"
+                         % (name, ord(bad.group())))
+    return text
+
+
 def render_mounts(streams, listener_auth, htpasswd_file, max_listeners):
     blocks = []
     for s in streams:
@@ -85,17 +109,17 @@ def render_mounts(streams, listener_auth, htpasswd_file, max_listeners):
         ml = s.get("max_listeners", max_listeners)
         b = []
         b.append('<mount type="normal">')
-        b.append("    <mount-name>%s</mount-name>" % mount)
-        b.append("    <stream-name>%s</stream-name>" % name)
-        b.append("    <stream-description>%s</stream-description>" % desc)
-        b.append("    <stream-genre>%s</stream-genre>" % genre)
+        b.append("    <mount-name>%s</mount-name>" % _xml_text(mount))
+        b.append("    <stream-name>%s</stream-name>" % _xml_text(name))
+        b.append("    <stream-description>%s</stream-description>" % _xml_text(desc))
+        b.append("    <stream-genre>%s</stream-genre>" % _xml_text(genre))
         if url:
-            b.append("    <stream-url>%s</stream-url>" % url)
+            b.append("    <stream-url>%s</stream-url>" % _xml_text(url))
         b.append("    <max-listeners>%d</max-listeners>" % int(ml))
         b.append("    <public>0</public>")
         if listener_auth:
             b.append('    <authentication type="htpasswd">')
-            b.append('        <option name="filename" value="%s"/>' % htpasswd_file)
+            b.append("        <option name=\"filename\" value=%s/>" % _xml_attr(htpasswd_file))
             b.append('        <option name="allow_duplicate_users" value="1"/>')
             b.append("    </authentication>")
         b.append("</mount>")
@@ -128,11 +152,16 @@ def render_icecast(stream_json, listen_json, out_dir, tpl_dir):
     )
 
     out = tpl
-    out = out.replace("@MAX_CLIENTS@", str(ic.get("max_clients", 64)))
-    out = out.replace("@SOURCE_PASSWORD@", ic.get("source_password", "changeme"))
-    out = out.replace("@ADMIN_PASSWORD@", ic.get("admin_password", "changeme"))
-    out = out.replace("@ICECAST_PORT@", str(ic.get("port", 8000)))
+    out = out.replace("@MAX_CLIENTS@", str(int(ic.get("max_clients", 64))))
+    out = out.replace("@SOURCE_PASSWORD@", _xml_text(ic.get("source_password", "changeme")))
+    out = out.replace("@ADMIN_PASSWORD@", _xml_text(ic.get("admin_password", "changeme")))
+    out = out.replace("@ICECAST_PORT@", str(int(ic.get("port", 8000))))
     out = out.replace("@MOUNTS@", mounts)
+
+    try:
+        ET.fromstring(out)
+    except ET.ParseError as e:
+        raise ValueError("generated icecast.xml is not well-formed; check stream.json values: %s" % e)
 
     with open(os.path.join(out_dir, "icecast.xml"), "w", encoding="utf-8") as fh:
         fh.write(out)
@@ -140,8 +169,9 @@ def render_icecast(stream_json, listen_json, out_dir, tpl_dir):
     # htpasswd for listener auth
     lines = []
     for u in listen_json.get("users", []):
-        pw = u.get("password", "")
-        lines.append("%s:%s" % (u["username"], md5_hash(pw)))
+        user = _assert_single_line(u["username"], "listen.json users[].username")
+        pw = _assert_single_line(u.get("password", ""), "listen.json users[].password")
+        lines.append("%s:%s" % (user, md5_hash(pw)))
     with open(htpasswd_file, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
     _chown_icecast(htpasswd_file)
@@ -156,7 +186,9 @@ def render_supervisor(stream_json, out_path, tpl_dir, cfg_json):
     ic = stream_json.get("icecast", {})
     verbosity = int(cfg_json.get("verbosity", 1)) if isinstance(cfg_json.get("verbosity"), int) else 1
     verbosity = max(0, min(verbosity, 11))
-    out = tpl.replace("@SUPERVISOR_PASSWORD@", ic.get("supervisor_password", "changeme"))
+    password = _assert_single_line(ic.get("supervisor_password", "changeme"),
+                                   "icecast.supervisor_password")
+    out = tpl.replace("@SUPERVISOR_PASSWORD@", password)
     out = out.replace("@OP25_VERBOSITY@", str(verbosity))
     with open(out_path, "w", encoding="utf-8") as fh:
         fh.write(out)
