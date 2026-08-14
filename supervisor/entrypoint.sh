@@ -23,10 +23,6 @@ python3 /opt/op25/render_configs.py --conf-dir "$CONF_DIR" --tpl-dir /opt/op25/d
 mkdir -p /var/log/op25 /var/log/icecast2 /var/lib/icecast2 /var/run/icecast2 /var/run/op25
 chown -R icecast2:icecast /var/log/icecast2 /var/lib/icecast2 /var/run/icecast2
 chmod 0775 /var/run/icecast2 /var/run/op25
-# icecast drops privileges via <changeowner>; the htpasswd db must be readable
-# by the icecast2 user (render_configs.py writes it 0600 root).
-chown icecast2:icecast /etc/op25/htpasswd
-
 # Build the op25 perl-style caches? (not needed). Just inform.
 echo "[entrypoint] op25-docker starting (op25 + icecast + streams + web)"
 

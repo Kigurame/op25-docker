@@ -32,6 +32,15 @@ def _resolve_keyfile(keyfile, conf_dir):
         return keyfile
     return os.path.join(conf_dir, keyfile)
 
+def _chown_icecast(path):
+    try:
+        import grp
+        import pwd
+        os.chown(path, pwd.getpwnam("icecast2").pw_uid, grp.getgrnam("icecast").gr_gid)
+        os.chmod(path, 0o600)
+    except (KeyError, OSError):
+        os.chmod(path, 0o600)
+
 
 def normalize_crypt(cfg_json, conf_dir):
     """Encrypted traffic is ignored unless the user provides a keys file.
@@ -135,7 +144,7 @@ def render_icecast(stream_json, listen_json, out_dir, tpl_dir):
         lines.append("%s:%s" % (u["username"], md5_hash(pw)))
     with open(htpasswd_file, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
-    os.chmod(htpasswd_file, 0o600)
+    _chown_icecast(htpasswd_file)
 
 
 def render_supervisor(stream_json, out_path, tpl_dir, cfg_json):
