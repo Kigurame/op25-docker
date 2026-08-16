@@ -77,4 +77,4 @@ redirect_stderr=true
 stdout_logfile=/var/log/op25/web.log
 stdout_logfile_maxbytes=20MB
 stdout_logfile_backups=4
-environment=OP25_CONF_DIR="/opt/op25/conf",OP25_APPS_DIR="/opt/op25/apps",OP25_TERM_PORT="5600",OP25_STREAM="primary"
+environment=OP25_CONF_DIR="/opt/op25/conf",OP25_APPS_DIR="/opt/op25/apps",OP25_TERM_PORT="5600",OP25_STREAM="primary",OP25_SESSION_SECRET="%(ENV_OP25_SESSION_SECRET)s"

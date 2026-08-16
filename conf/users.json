@@ -1,4 +1,5 @@
 {
+    "_template_notes": "Web control-plane accounts. On first boot the entrypoint REPLACES this admin password_hash with a randomly generated one and prints the credentials to the container log (docker compose logs op25 | grep -i password), so the 'admin123' hash below is only a template and never active. Change the password from the web UI (Config -> Change my password) or edit this file. 'session_ttl_hours' controls how long a login lasts before you must sign in again.",
     "users": [
         {
             "username": "admin",

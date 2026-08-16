@@ -55,14 +55,17 @@ Plug your USB radio dongle in first. Docker downloads the prebuilt image
 
 **2. Open the web page**
 
-Browse to `http://localhost:8080` and sign in:
+Browse to `http://localhost:8080`. On first boot the container generates a
+random admin password and prints it to the log — find it with:
 
-```
-username: admin
-password: admin123
+```bash
+docker compose logs op25 | grep -i password
 ```
 
-> **Please change that password right away** — see [Security](#security).
+Sign in with username `admin` and that password. There is no default
+`admin123`; the shipped template hash is replaced on first boot. **Change the
+password after signing in** (Config → *Change my password*) and set
+`OP25_SESSION_SECRET` — see [Security](#security).
 
 **3. Tell it about your radio and your local system**
 
@@ -157,17 +160,56 @@ then point at the right port. Nothing else changes.
 
 ## Security
 
-The default passwords exist only so you can start immediately — change them
-before exposing the service beyond your own PC:
+A few defaults exist so you can start immediately — but they are only safe on
+your own PC. Change them before exposing the service beyond that:
 
 | where | default |
 |-------|---------|
-| web login (admin) | `admin123` — change in **Config → Change my password** |
+| web login (admin) | **generated at first boot** — printed to `docker compose logs op25 \| grep -i password`. Change it in **Config → Change my password** |
 | listener login | `listen123` — change in `listen.json` |
 | Icecast internal passwords | `changeme-*` — change in `stream.json` |
 
+**Session secret.** Login sessions are HMAC-signed with `OP25_SESSION_SECRET`.
+Set it once in your shell before starting so sessions survive restarts:
+
+```bash
+export OP25_SESSION_SECRET="$(openssl rand -hex 32)"
+docker compose up -d
+```
+
+If it is left unset the container generates a random secret on each start
+(sessions reset on every restart). Never set it to the old known-default value
+`op25-docker-insecure-secret-change-me` — the control plane refuses to start
+with that, because tokens signed with it are forgeable by anyone who reads this
+repo.
+
 Prefer not to publish ports 8080/8000 directly to the internet; run this behind
 a reverse proxy with HTTPS if you want to listen from anywhere.
+
+## Upgrading an existing container
+
+Upgrading keeps all your data: the entrypoint only touches `./conf` on true
+first boot, so `cfg.json`, `stream.json`, `listen.json`, and your user accounts
+are left exactly as they are.
+
+```bash
+docker compose build && docker compose up -d
+# or, for the prebuilt image:
+docker compose pull && docker compose up -d
+```
+
+Two things to check after upgrading:
+
+- **If you set `OP25_SESSION_SECRET` to the old default
+  `op25-docker-insecure-secret-change-me`**, the container will refuse to
+  start. Remove it or set a real one before restarting
+  (`export OP25_SESSION_SECRET="$(openssl rand -hex 32)"`). If you never set
+  it, nothing to do — the container generates one each start, which signs
+  everyone out (see [Security](#security)).
+- **If you never changed the admin password**, your `users.json` still holds
+  the old template hash, so `admin` / `admin123` still works after upgrading
+  (the generated-password protection only applies to fresh installs). Log in
+  and change it via **Config → *Change my password***.
 
 ## Troubleshooting
 

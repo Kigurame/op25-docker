@@ -3,8 +3,9 @@
 #   docker compose up -d
 #
 # First boot seeds ./conf with default configs; then edit conf/cfg.json
-# (control channel frequency) and conf/stream.json (icecast passwords) and
-# restart from the web UI at http://localhost:8080 (admin / admin123).
+# (control channel frequency) and conf/stream.json (icecast passwords). The
+# admin password is generated on first boot and printed to the log
+# (docker compose logs op25 | grep -i password).
 services:
   op25:
     image: kigurame2/op25-docker:latest
@@ -23,5 +24,10 @@ services:
       - /etc/localtime:/etc/localtime:ro
     environment:
       - TZ=UTC
+      # Signs web-control-plane session tokens. If unset, the container
+      # generates a random one on each start (sessions reset on every restart).
+      # Set it once, e.g. `openssl rand -hex 32` in your shell before
+      # `docker compose up`, so sessions survive restarts.
+      - OP25_SESSION_SECRET=${OP25_SESSION_SECRET:-}
     tmpfs:
       - /tmp

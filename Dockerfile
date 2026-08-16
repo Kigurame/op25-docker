@@ -100,7 +100,7 @@ COPY --from=build /opt/op25/apps /opt/op25/apps
 # Project files
 COPY conf/ /opt/op25/defaults/
 COPY supervisor/ /opt/op25/supervisor/
-COPY stream_runner.py render_configs.py /opt/op25/
+COPY stream_runner.py render_configs.py set_admin_password.py /opt/op25/
 COPY control-plane/ /opt/op25/control-plane/
 
 RUN ldconfig
@@ -109,10 +109,11 @@ RUN ldconfig
 RUN python3 -m venv /opt/op25/venv \
     && /opt/op25/venv/bin/pip install --no-cache-dir --upgrade pip \
     && /opt/op25/venv/bin/pip install --no-cache-dir \
-        fastapi==0.111.0 \
-        "uvicorn[standard]==0.30.1" \
-        httpx==0.27.0 \
-        python-multipart==0.0.9
+        setuptools==84.0.0 \
+        fastapi==0.141.1 \
+        "uvicorn[standard]==0.52.3" \
+        httpx==0.28.1 \
+        python-multipart==0.0.32
 
 # Layout
 RUN mkdir -p /etc/op25 /var/log/op25 /var/log/icecast2 /var/lib/icecast2 /var/run/op25 /opt/op25/conf

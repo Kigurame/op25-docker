@@ -16,7 +16,7 @@ control channel frequency (MHz), NAC, band and Phase 2 option, then generates
 | `cfg.json` | op25 receiver: SDR device, channel, P25 trunking system (control channel, NAC, modulation), log `verbosity` |
 | `stream.json` | Icecast: ports, passwords, listener auth, and one stream entry per audio mount (optional `icecast.external_port` overrides the port shown in the web UI's Listen/Copy URL links) |
 | `listen.json` | Icecast listener accounts (used when `listener_auth` is true) |
-| `users.json` | Web control-plane accounts |
+| `users.json` | Web control-plane accounts. The template `admin` hash is replaced with a random password on first boot (printed to the container log) — no known default login |
 | `icecast-tpl.xml` | Icecast template (rendered by `render_configs.py`) |
 | `tags/tgid.tsv`, `tags/rid.tsv` | talkgroup and radio call-sign tags (`number<TAB>label`) |
 

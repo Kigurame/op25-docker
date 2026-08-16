@@ -37,8 +37,17 @@ docker compose up -d
 docker compose ps          # container should be Up
 ```
 
-Open the web UI at <http://localhost:8080> and sign in (`admin` / `admin123`).
-**Change that password immediately** (Config tab → *Change my password*).
+Open the web UI at <http://localhost:8080>. On first boot the entrypoint
+generates a random admin password and prints it to the container log — grab it
+with:
+
+```bash
+docker compose logs op25 | grep -i password
+```
+
+Sign in as `admin` with that password, then **change it immediately** (Config
+tab → *Change my password*). There is no default `admin123`; the template hash
+in `conf/users.json` is only a placeholder and is replaced on first boot.
 
 On first boot the entrypoint seeds `./conf` with default configs; always edit
 those files, never the image internals.
@@ -144,6 +153,31 @@ affected services automatically. Then:
 | ffmpeg repeatedly restarts in streams.log | Icecast wasn't reachable at startup; the pump retries with backoff automatically. |
 | Web UI shows `[object Object]` | your browser is serving a cached copy — hard-refresh (Ctrl+F5). After updating the repo, rebuild with `docker compose up -d --build`. |
 
+## 9. Upgrading an existing container
+
+Upgrades never touch your data: the entrypoint seeds `./conf` only on true
+first boot (when `stream.json` is missing), so your configs, icecast passwords
+and user accounts survive untouched.
+
+```bash
+docker compose build && docker compose up -d
+# or, for the prebuilt image:
+docker compose pull && docker compose up -d
+```
+
+Two things to check after upgrading:
+
+- **`OP25_SESSION_SECRET` set to the old default
+  `op25-docker-insecure-secret-change-me`** — the control plane refuses to
+  start with that value. Remove it or set a real one before restarting
+  (`export OP25_SESSION_SECRET="$(openssl rand -hex 32)"`). If you never set
+  it, the container generates one each start, which signs everyone out (see
+  [Users & session secret](#users--session-secret)).
+- **Still on the old `admin` / `admin123` template hash** — that login keeps
+  working after an upgrade because the password is only randomized when the
+  volume is seeded fresh. Log in and rotate it via **Config → *Change my
+  password*** once you've upgraded.
+
 ## Advanced reference
 
 > For power users editing the config files directly. Most people never need
@@ -160,6 +194,7 @@ affected services automatically. Then:
 ├── examples/docker-compose.yml # run the published Docker Hub image
 ├── docs/SETUP.md               # this guide
 ├── render_configs.py           # renders icecast.xml / htpasswd / supervisord.conf from conf/
+├── set_admin_password.py       # first-boot helper: replaces the admin password with a random one
 ├── stream_runner.py            # UDP audio → ffmpeg → icecast pump + metadata updater
 ├── conf/                       # your editable configuration (volume-mounted)
 │   ├── cfg.json                #   op25: devices, channels, trunking (P25 system)
@@ -268,7 +303,27 @@ SPA served at `/`; API at `/api/*`:
 
 The entrypoint copies `conf/` defaults into the mounted volume only if
 `stream.json` is absent, so your edits to the bind-mounted `conf/` directory
-always win.
+always win. When it does seed the volume it also calls `set_admin_password.py`,
+which replaces the template `admin` password hash with a random password and
+prints the credentials to the container log. Fresh installs therefore have no
+known default login.
+
+### Users & session secret
+
+- `conf/users.json` holds the web control-plane accounts (`role`: `admin` /
+  `viewer`) and `session_ttl_hours` (default 12). Add users from the UI
+  (**Config → Add user**), change your own password with **Config → Change my
+  password**.
+- Logins are HMAC-signed session cookies. Set `OP25_SESSION_SECRET` (see the
+  [README security section](../README.md#security)) so sessions survive
+  restarts:
+  ```bash
+  export OP25_SESSION_SECRET="$(openssl rand -hex 32)"
+  docker compose up -d
+  ```
+  If it's unset, a random secret is generated on each start and every restart
+  signs everyone out. The control plane refuses to start with the known
+  insecure default `op25-docker-insecure-secret-change-me`.
 
 ### Tags
 

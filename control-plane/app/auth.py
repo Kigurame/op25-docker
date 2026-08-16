@@ -8,8 +8,31 @@ import time
 
 from .config_store import read_json
 
-SESSION_SECRET = os.environ.get("OP25_SESSION_SECRET", "op25-docker-insecure-secret-change-me")
+# The default secret that shipped with early releases. Sessions signed with it
+# are forgeable by anyone who reads this repository, so we refuse to run with
+# it instead of silently trusting it. Deployments must either set
+# OP25_SESSION_SECRET or accept that sessions reset on every (re)start.
+INSECURE_DEFAULT_SECRET = "op25-docker-insecure-secret-change-me"
 TOKEN_TTL = 12 * 3600
+
+
+def _load_session_secret():
+    secret = os.environ.get("OP25_SESSION_SECRET")
+    if not secret:
+        # No secret configured: generate one per process so the default build
+        # cannot be forged. Sessions are invalidated whenever the web app
+        # (re)starts; set OP25_SESSION_SECRET for sessions that survive restarts.
+        secret = base64.urlsafe_b64encode(os.urandom(48)).decode().rstrip("=")
+    elif secret == INSECURE_DEFAULT_SECRET:
+        raise RuntimeError(
+            "OP25_SESSION_SECRET is set to the known-insecure default "
+            "(%r). Set it to a random value, e.g. `openssl rand -hex 32`."
+            % INSECURE_DEFAULT_SECRET
+        )
+    return secret
+
+
+SESSION_SECRET = _load_session_secret()
 
 
 def verify_password(password, stored):

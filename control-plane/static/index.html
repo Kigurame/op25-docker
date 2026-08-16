@@ -128,9 +128,11 @@ audio { width: 100%; height: 34px; }
     <button class="primary" id="loginBtn" style="width:100%">Sign in</button>
     <div id="loginErr" class="msg err"></div>
     <div class="hint" style="margin-top:12px">
-      First time? The default account is <code class="mono">admin</code> /
-      <code class="mono">admin123</code> &mdash; please change the password after
-      signing in (Config &rarr; <i>Change my password</i>).
+      First time? On first boot the admin password is generated and printed to
+      the container log (<code class="mono">docker compose logs op25 | grep -i
+      password</code>). Sign in as <code class="mono">admin</code> and please
+      change the password after signing in (Config &rarr; <i>Change my
+      password</i>).
     </div>
   </div>
 </div>
