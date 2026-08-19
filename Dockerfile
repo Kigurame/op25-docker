@@ -113,7 +113,8 @@ RUN python3 -m venv /opt/op25/venv \
         fastapi==0.141.1 \
         "uvicorn[standard]==0.52.3" \
         httpx==0.28.1 \
-        python-multipart==0.0.32
+        python-multipart==0.0.32 \
+        paho-mqtt==2.1.0
 
 # Layout
 RUN mkdir -p /etc/op25 /var/log/op25 /var/log/icecast2 /var/lib/icecast2 /var/run/op25 /opt/op25/conf

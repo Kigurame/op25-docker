@@ -77,4 +77,4 @@ redirect_stderr=true
 stdout_logfile=/var/log/op25/web.log
 stdout_logfile_maxbytes=20MB
 stdout_logfile_backups=4
-environment=OP25_CONF_DIR="/opt/op25/conf",OP25_APPS_DIR="/opt/op25/apps",OP25_TERM_PORT="5600",OP25_STREAM="primary",OP25_SESSION_SECRET="%(ENV_OP25_SESSION_SECRET)s"
+environment=OP25_CONF_DIR="/opt/op25/conf",OP25_APPS_DIR="/opt/op25/apps",OP25_TERM_PORT="5600",OP25_STREAM="primary",OP25_SESSION_SECRET="%(ENV_OP25_SESSION_SECRET)s",OP25_MQTT_HOST="%(ENV_OP25_MQTT_HOST)s",OP25_MQTT_PORT="%(ENV_OP25_MQTT_PORT)s",OP25_MQTT_USER="%(ENV_OP25_MQTT_USER)s",OP25_MQTT_PASS="%(ENV_OP25_MQTT_PASS)s",OP25_MQTT_PREFIX="%(ENV_OP25_MQTT_PREFIX)s"

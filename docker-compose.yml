@@ -22,5 +22,21 @@ services:
       # Set it once, e.g. `openssl rand -hex 32` in your shell before
       # `docker compose up`, so sessions survive restarts.
       - OP25_SESSION_SECRET=${OP25_SESSION_SECRET:-}
+      # MQTT bridge — uncomment and set to your broker to enable HA sensor entities
+      # via Home Assistant auto-discovery. When enabled, op25 publishes service
+      # status, active talkgroups, call logs, and SDR state.
+      # - OP25_MQTT_HOST=mosquitto
+      # - OP25_MQTT_PORT=1883
+      # - OP25_MQTT_USER=
+      # - OP25_MQTT_PASS=
+      # - OP25_MQTT_PREFIX=op25
     tmpfs:
       - /tmp
+
+  music-assistant:
+    image: ghcr.io/music-assistant/server:latest
+    container_name: music-assistant-server
+    network_mode: host
+    volumes:
+      - ./music-assistant-data:/data
+    restart: unless-stopped

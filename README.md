@@ -146,6 +146,122 @@ the outside of the container (for example `8000:9000` in your
 (e.g. `9000`) in `stream.json` — the **Listen** and **Copy URL** links will
 then point at the right port. Nothing else changes.
 
+## Home Assistant integration
+
+op25-docker integrates with Home Assistant via **Music Assistant** (audio
+playback) and an optional **MQTT bridge** (sensor entities with auto-discovery).
+
+```
+  op25 container ──▶ Icecast (port 8000)
+        │                  │
+        │           Music Assistant fetches stream
+        │                  │
+        ▼                  ▼
+  MQTT bridge ──▶ HA sensors (talkgroups, calls, status)
+                         │
+                         ▼
+                  HA media players / dashboard
+```
+
+### Music Assistant (audio playback)
+
+Music Assistant bridges op25's audio to any HA media player — Chromecast,
+Sonos, AirPlay speakers, and more. It handles transcoding and multi-room sync.
+
+**1. Add the Music Assistant container**
+
+The `docker-compose.yml` already includes a `music-assistant` service. Pull and
+start it:
+
+```bash
+docker compose pull
+docker compose up -d music-assistant
+```
+
+**2. Connect MA to Home Assistant**
+
+In HA: **Settings → Devices & Services → Add Integration → Music Assistant**.
+Enter the MA server URL: `http://<your-host-ip>:8095`.
+
+**3. Add op25 as a radio station**
+
+Open the MA web UI at `http://<your-host-ip>:8095`. Go to **Radio** and add a
+new station with the Icecast URL:
+
+```
+http://<your-pc-ip>:8000/primary.mp3
+```
+
+**4. Play on any speaker**
+
+Use HA automations or the media browser to play the scanner on any connected
+speaker:
+
+```yaml
+action: media_player.play_media
+target:
+  entity_id: media_player.living_room
+data:
+  media_content_id: "http://<your-pc-ip>:8000/primary.mp3"
+  media_content_type: music
+```
+
+### MQTT bridge (HA sensor entities)
+
+The MQTT bridge publishes scanner data to your MQTT broker. Home Assistant
+auto-discovers the entities — no manual configuration needed.
+
+**1. Enable the bridge**
+
+Uncomment and set the `OP25_MQTT_*` environment variables in
+`docker-compose.yml`:
+
+```yaml
+environment:
+  - OP25_MQTT_HOST=your-broker-host
+  - OP25_MQTT_PORT=1883       # optional, default 1883
+  - OP25_MQTT_USER=your-user  # optional
+  - OP25_MQTT_PASS=your-pass  # optional
+  - OP25_MQTT_PREFIX=op25     # optional, default "op25"
+```
+
+Restart the container:
+
+```bash
+docker compose up -d op25
+```
+
+**2. Auto-discovered entities in HA**
+
+Once enabled, HA automatically creates these entities:
+
+| Entity | Type | What it shows |
+|--------|------|---------------|
+| `binary_sensor.op25_op25` | Service health | RUNNING / STOPPED |
+| `binary_sensor.op25_icecast` | Service health | RUNNING / STOPPED |
+| `binary_sensor.op25_streams` | Service health | RUNNING / STOPPED |
+| `binary_sensor.op25_web` | Service health | RUNNING / STOPPED |
+| `sensor.op25_active_talkgroup` | Current talkgroup | Name or ID of active talkgroup |
+| `sensor.op25_active_source` | Current source | Radio ID transmitting |
+| `sensor.op25_active_frequency` | Current frequency | MHz of active channel |
+| `sensor.op25_call_count` | Recent calls | Number of decoded calls |
+| `sensor.op25_sdr_status` | SDR status | OK / Error |
+
+**3. Example automation**
+
+Trigger an alert when a specific talkgroup becomes active:
+
+```yaml
+trigger:
+  - platform: state
+    entity_id: sensor.op25_active_talkgroup
+    to: "Fire Dispatch"
+action:
+  - service: notify.mobile_app
+    data:
+      message: "Active on Fire Dispatch"
+```
+
 ## Nice extras
 
 - **Name your talkgroups and radios** — add labels in **Config → tgid.tsv**

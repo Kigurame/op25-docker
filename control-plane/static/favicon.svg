@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Radio tower body -->
+  <path d="M16 28 L14 12 L18 12 Z" fill="#8b98a8"/>
+  <path d="M14 12 L10 4 L13 4 L16 10 L19 4 L22 4 L18 12 Z" fill="#8b98a8"/>
+  <!-- Tower base -->
+  <rect x="12" y="27" width="8" height="2" rx="1" fill="#8b98a8"/>
+  <!-- Antenna tip -->
+  <circle cx="16" cy="3" r="1.5" fill="#f85149"/>
+  <!-- Signal waves -->
+  <path d="M8 8 Q5.5 6 5.5 3.5" stroke="#2f81f7" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.9"/>
+  <path d="M5 7 Q2 5 2 2" stroke="#2f81f7" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.7"/>
+  <path d="M24 8 Q26.5 6 26.5 3.5" stroke="#2f81f7" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.9"/>
+  <path d="M27 7 Q30 5 30 2" stroke="#2f81f7" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.7"/>
+</svg>
