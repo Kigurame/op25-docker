@@ -1,0 +1,75 @@
+name: Smoke Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  boot-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: op25-docker:smoke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Boot with no optional environment (supervisord ENV expansion regression)
+        run: |
+          docker run -d --name op25-smoke -p 8080:8080 op25-docker:smoke
+          ok=""
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:8080/api/health >/dev/null 2>&1; then ok=1; break; fi
+            sleep 2
+          done
+          if [ -z "$ok" ]; then
+            echo "::error::container never became healthy"
+            docker ps -a --filter name=op25-smoke
+            docker logs op25-smoke || true
+            exit 1
+          fi
+          status="$(docker exec op25-smoke supervisorctl -c /etc/op25/supervisord.conf status)"
+          echo "$status"
+          echo "$status" | grep -Eq '^web[[:space:]]+RUNNING'
+          echo "$status" | grep -Eq '^icecast[[:space:]]+RUNNING'
+          echo "$status" | grep -Eq '^streams[[:space:]]+RUNNING'
+
+      - name: Boot with MQTT enabled and verify HA auto-discovery
+        run: |
+          docker network create mqtt-smoke
+          docker run -d --name mosq --network mqtt-smoke eclipse-mosquitto:2 \
+            mosquitto -c /mosquitto-no-auth.conf
+          sleep 2
+          docker run -d --name op25-ha --network mqtt-smoke \
+            -e OP25_MQTT_HOST=mosq -e OP25_MQTT_PREFIX=op25test \
+            -p 8080:8080 op25-docker:smoke
+          ok=""
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:8080/api/health >/dev/null 2>&1; then ok=1; break; fi
+            sleep 2
+          done
+          if [ -z "$ok" ]; then
+            echo "::error::MQTT-enabled container never became healthy"
+            docker logs op25-ha || true
+            exit 1
+          fi
+          msgs="$(docker exec mosq mosquitto_sub -h localhost -t 'op25test/#' -t 'homeassistant/#' -W 5)"
+          echo "$msgs" | head -20
+          echo "$msgs" | grep -q '^op25test/status online'
+          count="$(echo "$msgs" | grep -Ec '^homeassistant/[^ ]+/config')"
+          echo "discovery configs: $count"
+          [ "$count" -eq 9 ]

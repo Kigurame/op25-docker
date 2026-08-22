@@ -17,6 +17,15 @@ if [ -z "${OP25_SESSION_SECRET:-}" ]; then
     export OP25_SESSION_SECRET
 fi
 
+# Same class of problem: any %(ENV_x)s referenced by supervisord.conf must be
+# defined or supervisord refuses to start. The optional MQTT vars are no longer
+# referenced there, but default them anyway so children always see sane values.
+export OP25_MQTT_HOST="${OP25_MQTT_HOST:-}"
+export OP25_MQTT_PORT="${OP25_MQTT_PORT:-1883}"
+export OP25_MQTT_USER="${OP25_MQTT_USER:-}"
+export OP25_MQTT_PASS="${OP25_MQTT_PASS:-}"
+export OP25_MQTT_PREFIX="${OP25_MQTT_PREFIX:-op25}"
+
 # Copy default configs into the volume if it is empty (first boot with a mounted volume)
 if [ -d "$CONF_DIR" ] && [ ! -f "$CONF_DIR/stream.json" ] \
    && [ "$(readlink -f "$CONF_DIR")" != "/opt/op25/defaults" ]; then
