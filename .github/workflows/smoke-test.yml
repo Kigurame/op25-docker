@@ -74,7 +74,7 @@ jobs:
           # poll until the broker has something for us.
           msgs=""
           for i in $(seq 1 15); do
-            msgs="$(docker exec mosq mosquitto_sub -h localhost -t 'op25test/#' -t 'homeassistant/#' -W 3 2>/dev/null || true)"
+            msgs="$(docker exec mosq mosquitto_sub -h localhost -v -t 'op25test/#' -t 'homeassistant/#' -W 3 2>/dev/null || true)"
             [ -n "$msgs" ] && break
             sleep 2
           done
