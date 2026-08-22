@@ -58,10 +58,10 @@ jobs:
           sleep 2
           docker run -d --name op25-ha --network mqtt-smoke \
             -e OP25_MQTT_HOST=mosq -e OP25_MQTT_PREFIX=op25test \
-            -p 8080:8080 op25-docker:smoke
+            -p 18082:8080 op25-docker:smoke
           ok=""
           for i in $(seq 1 45); do
-            if curl -fsS http://127.0.0.1:8080/api/health >/dev/null 2>&1; then ok=1; break; fi
+            if curl -fsS http://127.0.0.1:18082/api/health >/dev/null 2>&1; then ok=1; break; fi
             sleep 2
           done
           if [ -z "$ok" ]; then
