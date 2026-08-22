@@ -69,7 +69,15 @@ jobs:
             docker logs op25-ha || true
             exit 1
           fi
-          msgs="$(docker exec mosq mosquitto_sub -h localhost -t 'op25test/#' -t 'homeassistant/#' -W 5)"
+          # Discovery is published on connect and retained, but CI boots fast
+          # enough that the subscriber can outrun the initial connect --
+          # poll until the broker has something for us.
+          msgs=""
+          for i in $(seq 1 15); do
+            msgs="$(docker exec mosq mosquitto_sub -h localhost -t 'op25test/#' -t 'homeassistant/#' -W 3 2>/dev/null || true)"
+            [ -n "$msgs" ] && break
+            sleep 2
+          done
           echo "$msgs" | head -20
           echo "$msgs" | grep -q '^op25test/status online'
           count="$(echo "$msgs" | grep -Ec '^homeassistant/[^ ]+/config')"
