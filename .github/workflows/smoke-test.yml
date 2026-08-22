@@ -33,20 +33,22 @@ jobs:
           docker run -d --name op25-smoke -p 8080:8080 op25-docker:smoke
           ok=""
           for i in $(seq 1 45); do
-            if curl -fsS http://127.0.0.1:8080/api/health >/dev/null 2>&1; then ok=1; break; fi
+            status="$(docker exec op25-smoke supervisorctl -c /etc/op25/supervisord.conf status 2>/dev/null || true)"
+            if echo "$status" | grep -Eq '^web[[:space:]]+RUNNING' \
+               && echo "$status" | grep -Eq '^icecast[[:space:]]+RUNNING' \
+               && echo "$status" | grep -Eq '^streams[[:space:]]+RUNNING'; then
+              ok=1
+              break
+            fi
             sleep 2
           done
           if [ -z "$ok" ]; then
-            echo "::error::container never became healthy"
+            echo "::error::container never became healthy with programs RUNNING"
             docker ps -a --filter name=op25-smoke
             docker logs op25-smoke || true
             exit 1
           fi
-          status="$(docker exec op25-smoke supervisorctl -c /etc/op25/supervisord.conf status)"
           echo "$status"
-          echo "$status" | grep -Eq '^web[[:space:]]+RUNNING'
-          echo "$status" | grep -Eq '^icecast[[:space:]]+RUNNING'
-          echo "$status" | grep -Eq '^streams[[:space:]]+RUNNING'
 
       - name: Boot with MQTT enabled and verify HA auto-discovery
         run: |
