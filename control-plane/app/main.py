@@ -3,6 +3,7 @@ import base64
 import copy
 import hmac
 import json
+import logging
 import os
 import subprocess
 import threading
@@ -17,6 +18,8 @@ from . import auth, config_store, op25_ctl, sdr, supervisor_ctl
 from .telemetry import telemetry as TELEM
 
 app = FastAPI(title="op25-docker control plane", docs_url=None, redoc_url=None)
+
+log = logging.getLogger("op25.web")
 
 CONF_DIR = os.environ.get("OP25_CONF_DIR", "/opt/op25/conf")
 RENDER = ["/opt/op25/venv/bin/python", "/opt/op25/render_configs.py",
@@ -586,6 +589,7 @@ async def playlist_m3u(request: Request):
         except PermissionError:
             if not (_listener_basic_auth_ok(request)
                     or _listener_query_auth_ok(request)):
+                _log_playlist_auth_rejected(request)
                 return JSONResponse({"error": "not authenticated"}, status_code=401,
                                     headers={"WWW-Authenticate": 'Basic realm="op25 streams"'})
 
@@ -647,6 +651,26 @@ def _listener_query_auth_ok(request: Request):
     username = request.query_params.get("user") or ""
     password = request.query_params.get("password") or ""
     return _listener_creds_ok(username, password)
+
+
+def _log_playlist_auth_rejected(request: Request):
+    """Diagnose rejected /playlist.m3u hits without logging secret values.
+
+    Common causes this pinpoints: a pre-query-param playlist URL, or an
+    op25 container that predates query-param support (params present but
+    ignored by the old image)."""
+    qp = request.query_params
+    signals = []
+    if request.cookies.get("op25_session"):
+        signals.append("session-cookie(present)")
+    if request.headers.get("authorization", "").lower().startswith("basic "):
+        signals.append("basic-header(present)")
+    if "user" in qp or "password" in qp:
+        signals.append("query-creds(present)")
+    if not signals:
+        signals.append("no-auth-signals")
+    log.warning("[playlist] rejected fetch from %s: %s",
+                _request_hostname(request), ", ".join(signals))
 
 
 def _listener_creds_ok(username: str, password: str):
