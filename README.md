@@ -174,11 +174,17 @@ replace `<your-pc-ip>`, and use that instead (plain URLs, no tuner probing).
 1. In Jellyfin: **Dashboard → Live TV → Tuners → Add Tuner → M3U Tuner**.
 2. Paste the playlist URL as the tuner source (or enter the path to the m3u
    file — it must be readable by the Jellyfin **server**, not just clients).
-3. Save, then find the scanner under **Radio** (Jellyfin 10.9+) or in Live TV
-   channels, and play it on any client.
+3. Save — Jellyfin automatically starts its *Refresh Guide* task; once that
+   finishes, the scanner is listed as a channel under **Live TV → Channels**
+   and plays on any client.
 
 **Good to know**
 
+- The scanner appears under **Live TV → Channels** — this is standard
+  Jellyfin behavior for any M3U stream. Don't look in the *Guide* grid: it
+  stays empty because we don't ship XMLTV guide data for a live feed.
+- Channel not listed right after saving? Dashboard → Scheduled Tasks →
+  Live TV → run **Refresh Guide**, then re-check Channels.
 - Jellyfin runs in Docker and the tuner save fails? The URL must be reachable
   from *inside* the Jellyfin container: use your PC's LAN IP (e.g.
   `192.168.1.50`), never `localhost` / `127.0.0.1`.
@@ -334,6 +340,7 @@ Two things to check after upgrading:
 | Web page loads but no audio | The control channel or NAC is wrong. Double-check the frequency and NAC in the wizard — the two most common mistakes. See *Finding your system's settings*. |
 | Audio garbles / drifts after a while | Tiny crystal drift. Bump **PPM correction** by a few (try 10–30) in the wizard until it stays clean. |
 | Stream asks for a password | That's expected: `scanner` / `listen123` by default (change it in `listen.json`), or turn auth off in `stream.json`. |
+| Tuner saved in Jellyfin but no channel appears | Run Dashboard → Scheduled Tasks → Live TV → **Refresh Guide**, then look under **Live TV → Channels** — not the Guide grid, which stays empty without XMLTV data. Also confirm your Jellyfin user has *Allow Live TV access* enabled. |
 | Still stuck? | **Status → op25 diagnostics** has two buttons that tell you exactly what the radio is hearing: set log level 9 and watch the op25 log, or click *Dump decoded talkgroups to log*. |
 
 ## Building from source (optional)
