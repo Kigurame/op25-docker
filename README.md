@@ -146,64 +146,55 @@ the outside of the container (for example `8000:9000` in your
 (e.g. `9000`) in `stream.json` — the **Listen** and **Copy URL** links will
 then point at the right port. Nothing else changes.
 
+## Playing the stream in Jellyfin
+
+Jellyfin has no "internet radio URL" box, but it plays exactly this kind of
+stream through its **Live TV / Radio** subsystem via an M3U tuner.
+
+**1. Get your playlist link**
+
+In the web UI's **Live** tab, click **Copy Jellyfin URL** (top of the
+*Streams* panel). That copies a link like:
+
+```
+http://scanner:listen123@<your-pc-ip>:8080/playlist.m3u
+```
+
+This is generated live by the container: it lists every enabled stream with
+listener credentials embedded and always matches your current mounts and
+passwords — no file to maintain. You can also open it in any browser while
+signed in to preview it.
+
+Prefer a static file? Copy [examples/jellyfin.m3u](examples/jellyfin.m3u),
+replace `<your-pc-ip>`, and use that instead.
+
+**2. Add it to Jellyfin**
+
+1. In Jellyfin: **Dashboard → Live TV → Tuners → Add Tuner → M3U Tuner**.
+2. Paste the playlist URL as the tuner source (or enter the path to the m3u
+   file — it must be readable by the Jellyfin **server**, not just clients).
+   Credentials in the URL are fine; Jellyfin fetches with HTTP Basic auth.
+3. Save, then find the scanner under **Radio** (Jellyfin 10.9+) or in Live TV
+   channels, and play it on any client.
+
+**Good to know**
+
+- Jellyfin fetches the playlist and audio **server-side**, so the IP/hostname
+  in the link must be reachable from the machine running Jellyfin.
+- Published Icecast on a different port? Set `icecast.external_port` in
+  `stream.json` (above) — the playlist URLs follow automatically.
+- No guide data needed; live streams can't be paused or seeked.
+
 ## Home Assistant integration
 
-op25-docker integrates with Home Assistant via **Music Assistant** (audio
-playback) and an optional **MQTT bridge** (sensor entities with auto-discovery).
+op25-docker integrates with Home Assistant through an optional **MQTT bridge**
+(sensor entities with auto-discovery):
 
 ```
-  op25 container ──▶ Icecast (port 8000)
-        │                  │
-        │           Music Assistant fetches stream
-        │                  │
-        ▼                  ▼
-  MQTT bridge ──▶ HA sensors (talkgroups, calls, status)
-                         │
-                         ▼
-                  HA media players / dashboard
-```
-
-### Music Assistant (audio playback)
-
-Music Assistant bridges op25's audio to any HA media player — Chromecast,
-Sonos, AirPlay speakers, and more. It handles transcoding and multi-room sync.
-
-**1. Add the Music Assistant container**
-
-The `docker-compose.yml` already includes a `music-assistant` service. Pull and
-start it:
-
-```bash
-docker compose pull
-docker compose up -d music-assistant
-```
-
-**2. Connect MA to Home Assistant**
-
-In HA: **Settings → Devices & Services → Add Integration → Music Assistant**.
-Enter the MA server URL: `http://<your-host-ip>:8095`.
-
-**3. Add op25 as a radio station**
-
-Open the MA web UI at `http://<your-host-ip>:8095`. Go to **Radio** and add a
-new station with the Icecast URL:
-
-```
-http://<your-pc-ip>:8000/primary.mp3
-```
-
-**4. Play on any speaker**
-
-Use HA automations or the media browser to play the scanner on any connected
-speaker:
-
-```yaml
-action: media_player.play_media
-target:
-  entity_id: media_player.living_room
-data:
-  media_content_id: "http://<your-pc-ip>:8000/primary.mp3"
-  media_content_type: music
+  op25 container ──▶ MQTT bridge ──▶ HA sensors (talkgroups, calls, status)
+                                          │
+                                          ▼
+                                 HA dashboard / automations
 ```
 
 ### MQTT bridge (HA sensor entities)
@@ -316,6 +307,11 @@ docker compose pull && docker compose up -d
 
 Two things to check after upgrading:
 
+- **Music Assistant was removed from `docker-compose.yml`.** `docker compose
+  up -d` now drops the old container automatically. To clean up leftovers:
+  `docker rm music-assistant-server && rm -rf ./music-assistant-data`. To play
+  the scanner on speakers, see
+  [Playing the stream in Jellyfin](#playing-the-stream-in-jellyfin).
 - **If you set `OP25_SESSION_SECRET` to the old default
   `op25-docker-insecure-secret-change-me`**, the container will refuse to
   start. Remove it or set a real one before restarting

@@ -165,7 +165,9 @@ audio { width: 100%; height: 34px; }
         <div id="channels" class="grid"></div>
       </div>
       <div class="panel">
-        <h3>Streams</h3>
+        <h3 style="display:flex;justify-content:space-between;align-items:center;gap:8px">Streams
+          <button class="btn" id="copyM3uBtn" data-orig-label="Copy Jellyfin URL" title="Playlist URL for Jellyfin and other M3U players (covers every enabled stream)">Copy Jellyfin URL</button>
+        </h3>
         <div id="streams" class="grid"></div>
       </div>
     </div>
@@ -543,10 +545,24 @@ $("streams").addEventListener("click", e => {
   if (b) copyText(b.dataset.copy, b);
 });
 
+function playlistUrlFor() {
+  const ic = (lastStreamsCfg && lastStreamsCfg.icecast) || {};
+  if (ic.listener_auth) {
+    const lu = cfgData && cfgData.files && cfgData.files["listen.json"];
+    const u = lu && lu.users && lu.users[0];
+    if (u && u.username && u.password)
+      return "http://" + encodeURIComponent(u.username) + ":" + encodeURIComponent(u.password) + "@" + location.host + "/playlist.m3u";
+  }
+  return location.origin + "/playlist.m3u";
+}
+
+$("copyM3uBtn").addEventListener("click", e => copyText(playlistUrlFor(), e.target));
+
 function copyText(txt, btn) {
+  const orig = btn.dataset.origLabel || "Copy URL";
   const done = () => {
     btn.textContent = "Copied";
-    setTimeout(() => { btn.textContent = "Copy URL"; }, 1200);
+    setTimeout(() => { btn.textContent = orig; }, 1200);
   };
   if (navigator.clipboard && window.isSecureContext) {
     navigator.clipboard.writeText(txt).then(done, () => fallbackCopy(txt, done));

@@ -1,5 +1,7 @@
 """op25-docker control plane - FastAPI application."""
+import base64
 import copy
+import hmac
 import json
 import os
 import subprocess
@@ -550,6 +552,96 @@ async def proxy_stream(mount: str, request: Request):
             await client.aclose()
 
     return StreamingResponse(gen(), media_type=headers.get("content-type", "audio/mpeg"), headers=headers)
+
+
+@app.get("/playlist.m3u")
+async def playlist_m3u(request: Request):
+    """M3U playlist of every enabled Icecast mount, for players like Jellyfin.
+
+    Auth mirrors the stream proxy: either a signed-in web session (so the
+    "Copy Jellyfin URL" button works in a browser) or HTTP Basic auth with any
+    listen.json listener account, so players can fetch it with credentials
+    embedded in the URL. Stream URLs inside the playlist embed the listener
+    login when listener_auth is on, and point at the same host the playlist
+    itself was fetched from, with icecast.external_port honored.
+    """
+    try:
+        stream_cfg = config_store.read_json("stream.json")
+    except OSError:
+        return JSONResponse({"error": "no stream config"}, status_code=500)
+
+    ic = stream_cfg.get("icecast", {})
+    # With listener auth on, guard the playlist (it embeds credentials);
+    # with it off, the feed itself is public, so serve it anonymously too.
+    if ic.get("listener_auth"):
+        try:
+            require_user(request)
+        except PermissionError:
+            if not _listener_basic_auth_ok(request):
+                return JSONResponse({"error": "not authenticated"}, status_code=401,
+                                    headers={"WWW-Authenticate": 'Basic realm="op25 streams"'})
+
+    hostname = _request_hostname(request)
+    port = int(ic.get("external_port") or ic.get("port") or 8000)
+    base = "%s:%d" % (hostname, port)
+
+    prefix = ""
+    if ic.get("listener_auth"):
+        try:
+            users = config_store.read_json("listen.json").get("users", [])
+        except OSError:
+            users = []
+        if users and users[0].get("username") and users[0].get("password", ""):
+            u = users[0]
+            prefix = "%s:%s@" % (urllib.parse.quote(str(u["username"]), safe=""),
+                                 urllib.parse.quote(str(u["password"]), safe=""))
+
+    lines = ["#EXTM3U"]
+    for s in stream_cfg.get("streams", []):
+        if not s.get("enabled"):
+            continue
+        mount = s.get("mount", "/")
+        name = s.get("icecast_name") or s.get("name") or mount
+        lines.append('#EXTINF:-1 group-title="Radio",%s' % name)
+        lines.append("http://%s%s%s" % (prefix, base, mount))
+
+    return Response("\n".join(lines) + "\n",
+                    media_type="audio/x-mpegurl",
+                    headers={"Cache-Control": "no-store"})
+
+
+def _request_hostname(request: Request):
+    """Hostname from the Host header, so the playlist points wherever the
+    caller reached us (works no matter what IP/hostname they used)."""
+    host_hdr = request.headers.get("host", "").strip()
+    if not host_hdr:
+        return "127.0.0.1"
+    if host_hdr.startswith("["):  # IPv6 literal, e.g. [::1]:8080
+        return host_hdr[1:host_hdr.index("]")]
+    return host_hdr.rsplit(":", 1)[0] if ":" in host_hdr else host_hdr
+
+
+def _listener_basic_auth_ok(request: Request):
+    """True if HTTP Basic credentials match an account from listen.json."""
+    header = request.headers.get("authorization", "")
+    if not header.lower().startswith("basic "):
+        return False
+    try:
+        raw = base64.b64decode(header[6:].strip()).decode("utf-8", "replace")
+    except ValueError:
+        return False
+    username, _, password = raw.partition(":")
+    if not username:
+        return False
+    try:
+        listen = config_store.read_json("listen.json")
+    except (OSError, ValueError):
+        return False
+    for u in listen.get("users", []):
+        if (u.get("username") == username
+                and hmac.compare_digest(str(u.get("password", "")), password)):
+            return True
+    return False
 
 
 @app.get("/api/health")

@@ -1,0 +1,17 @@
+#EXTM3U
+# Manual playlist for Jellyfin / VLC / mpv.
+#
+# Replace <your-pc-ip> with the LAN IP or hostname of the machine running
+# op25-docker, then point your player's M3U tuner (Jellyfin: Dashboard ->
+# Live TV -> Tuners -> M3U Tuner) at this file.
+#
+# Credentials below are the default listener login (scanner / listen123).
+# If you changed them in conf/listen.json, update this URL to match - or set
+# icecast.listener_auth to false in conf/stream.json and drop the
+# scanner:listen123@ part entirely.
+#
+# Tip: you don't need to keep this file up to date by hand - the web UI's
+# Live tab has a "Copy Jellyfin URL" button that copies an always-current
+# playlist link (http://<your-pc>:8080/playlist.m3u).
+#EXTINF:-1 group-title="Radio",OP25 Scanner
+http://scanner:listen123@<your-pc-ip>:8000/primary.mp3

@@ -32,11 +32,3 @@ services:
       # - OP25_MQTT_PREFIX=op25
     tmpfs:
       - /tmp
-
-  music-assistant:
-    image: ghcr.io/music-assistant/server:latest
-    container_name: music-assistant-server
-    network_mode: host
-    volumes:
-      - ./music-assistant-data:/data
-    restart: unless-stopped

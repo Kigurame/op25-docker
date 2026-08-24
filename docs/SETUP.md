@@ -297,6 +297,7 @@ SPA served at `/`; API at `/api/*`:
 | `POST /api/op25/tsbk` | toggle TSBK detail and persist it in `cfg.json` (`{"enabled": true}`) |
 | `GET /api/op25/tsbk/feed` | recent non-voice signaling lines from the op25 log |
 | `GET /stream/{mount}` | authenticated Icecast proxy (programmatic clients) |
+| `GET /playlist.m3u` | M3U playlist of every enabled mount for players like Jellyfin. Auth: web session **or** HTTP Basic auth with a listener account, so the URL can carry credentials (`http://user:pass@host:8080/playlist.m3u`). Stream URLs embed the listener login when `listener_auth` is on and use the host the playlist was fetched from + `icecast.external_port` |
 | `GET /api/health` | healthcheck for Docker |
 
 ### First-boot config
