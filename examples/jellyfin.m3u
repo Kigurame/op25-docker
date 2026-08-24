@@ -12,6 +12,9 @@
 #
 # Tip: you don't need to keep this file up to date by hand - the web UI's
 # Live tab has a "Copy Jellyfin URL" button that copies an always-current
-# playlist link (http://<your-pc>:8080/playlist.m3u).
+# playlist link, e.g.
+#   http://<your-pc>:8080/playlist.m3u?user=scanner&password=listen123
+# (query params instead of user:pass@host - Jellyfin validates tuner URLs
+# without HTTP Basic auth, so userinfo-style links fail its save check).
 #EXTINF:-1 group-title="Radio",OP25 Scanner
 http://scanner:listen123@<your-pc-ip>:8000/primary.mp3

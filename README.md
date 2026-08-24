@@ -157,30 +157,33 @@ In the web UI's **Live** tab, click **Copy Jellyfin URL** (top of the
 *Streams* panel). That copies a link like:
 
 ```
-http://scanner:listen123@<your-pc-ip>:8080/playlist.m3u
+http://<your-pc-ip>:8080/playlist.m3u?user=scanner&password=listen123
 ```
 
-This is generated live by the container: it lists every enabled stream with
-listener credentials embedded and always matches your current mounts and
-passwords — no file to maintain. You can also open it in any browser while
-signed in to preview it.
+This is generated live by the container: it lists every enabled stream and
+always matches your current mounts and passwords — no file to maintain. The
+`user` / `password` params are your listener login from `listen.json`; they
+are sent that way because Jellyfin validates tuner URLs without HTTP Basic
+auth, so a `user:pass@host` style link fails its save check.
 
 Prefer a static file? Copy [examples/jellyfin.m3u](examples/jellyfin.m3u),
-replace `<your-pc-ip>`, and use that instead.
+replace `<your-pc-ip>`, and use that instead (plain URLs, no tuner probing).
 
 **2. Add it to Jellyfin**
 
 1. In Jellyfin: **Dashboard → Live TV → Tuners → Add Tuner → M3U Tuner**.
 2. Paste the playlist URL as the tuner source (or enter the path to the m3u
    file — it must be readable by the Jellyfin **server**, not just clients).
-   Credentials in the URL are fine; Jellyfin fetches with HTTP Basic auth.
 3. Save, then find the scanner under **Radio** (Jellyfin 10.9+) or in Live TV
    channels, and play it on any client.
 
 **Good to know**
 
+- Jellyfin runs in Docker and the tuner save fails? The URL must be reachable
+  from *inside* the Jellyfin container: use your PC's LAN IP (e.g.
+  `192.168.1.50`), never `localhost` / `127.0.0.1`.
 - Jellyfin fetches the playlist and audio **server-side**, so the IP/hostname
-  in the link must be reachable from the machine running Jellyfin.
+  in the link must resolve from the machine running Jellyfin.
 - Published Icecast on a different port? Set `icecast.external_port` in
   `stream.json` (above) — the playlist URLs follow automatically.
 - No guide data needed; live streams can't be paused or seeked.

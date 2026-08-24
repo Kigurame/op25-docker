@@ -554,16 +554,23 @@ async def proxy_stream(mount: str, request: Request):
     return StreamingResponse(gen(), media_type=headers.get("content-type", "audio/mpeg"), headers=headers)
 
 
-@app.get("/playlist.m3u")
+@app.api_route("/playlist.m3u", methods=["GET", "HEAD"])
 async def playlist_m3u(request: Request):
     """M3U playlist of every enabled Icecast mount, for players like Jellyfin.
 
-    Auth mirrors the stream proxy: either a signed-in web session (so the
-    "Copy Jellyfin URL" button works in a browser) or HTTP Basic auth with any
-    listen.json listener account, so players can fetch it with credentials
-    embedded in the URL. Stream URLs inside the playlist embed the listener
-    login when listener_auth is on, and point at the same host the playlist
-    itself was fetched from, with icecast.external_port honored.
+    HEAD must be accepted too: Jellyfin probes tuners with HTTP HEAD, and a
+    405 here surfaces in its UI as "error saving the TV provider".
+
+    Auth (when listener_auth is on), any of:
+      - a signed-in web session cookie ("Copy Jellyfin URL" in the browser)
+      - HTTP Basic auth with a listen.json listener account
+      - ?user=...&password=... query params matching a listener account
+
+    Query params matter because players like Jellyfin validate the tuner URL
+    with plain requests that never carry Basic credentials, even when the URL
+    embeds user:pass@host. Stream URLs inside the playlist embed the listener
+    login when listener_auth is on and point at the same host the playlist was
+    fetched from, with icecast.external_port honored.
     """
     try:
         stream_cfg = config_store.read_json("stream.json")
@@ -577,7 +584,8 @@ async def playlist_m3u(request: Request):
         try:
             require_user(request)
         except PermissionError:
-            if not _listener_basic_auth_ok(request):
+            if not (_listener_basic_auth_ok(request)
+                    or _listener_query_auth_ok(request)):
                 return JSONResponse({"error": "not authenticated"}, status_code=401,
                                     headers={"WWW-Authenticate": 'Basic realm="op25 streams"'})
 
@@ -631,6 +639,17 @@ def _listener_basic_auth_ok(request: Request):
     except ValueError:
         return False
     username, _, password = raw.partition(":")
+    return _listener_creds_ok(username, password)
+
+
+def _listener_query_auth_ok(request: Request):
+    """True if ?user=&password= query params match a listen.json account."""
+    username = request.query_params.get("user") or ""
+    password = request.query_params.get("password") or ""
+    return _listener_creds_ok(username, password)
+
+
+def _listener_creds_ok(username: str, password: str):
     if not username:
         return False
     try:

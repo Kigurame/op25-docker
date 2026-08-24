@@ -550,8 +550,11 @@ function playlistUrlFor() {
   if (ic.listener_auth) {
     const lu = cfgData && cfgData.files && cfgData.files["listen.json"];
     const u = lu && lu.users && lu.users[0];
+    // Query params, not user:pass@host: Jellyfin's tuner probe never sends
+    // Basic auth for userinfo-style URLs, so the save would fail with 401.
     if (u && u.username && u.password)
-      return "http://" + encodeURIComponent(u.username) + ":" + encodeURIComponent(u.password) + "@" + location.host + "/playlist.m3u";
+      return location.origin + "/playlist.m3u?user=" + encodeURIComponent(u.username)
+           + "&password=" + encodeURIComponent(u.password);
   }
   return location.origin + "/playlist.m3u";
 }
